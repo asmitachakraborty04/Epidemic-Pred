@@ -3,6 +3,7 @@ import Landing from "./Landing";
 import Dashboard from "./Dashboard";
 import Login from "./Login";
 import Signup from "./Signup";
+import Profile from "./Profile";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -37,6 +38,30 @@ const css = `
     width: 480px; height: 480px;
     background: radial-gradient(circle, rgba(236,72,153,0.13) 0%, transparent 70%);
     pointer-events: none;
+  }
+
+  .profile-btn {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 200;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(99, 102, 241, 0.18);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    transition: background 0.2s, transform 0.15s;
+    backdrop-filter: blur(12px);
+  }
+
+  .profile-btn:hover {
+    background: rgba(99, 102, 241, 0.35);
+    transform: scale(1.08);
   }
 
   .card {
@@ -297,16 +322,27 @@ const css = `
   .shake { animation: shake 0.35s ease; }
 `;
 
+function ProfileButton({ setPage }) {
+  return (
+    <button
+      className="profile-btn"
+      onClick={() => setPage("profile")}
+      title="Go to Profile"
+    >
+      👤
+    </button>
+  );
+}
+
 export default function App() {
   const [region, setRegion] = useState("");
-  const [page, setPage] = useState("landing"); // landing | signup | login | input | dashboard
+  const [page, setPage] = useState("landing");
   const [risk, setRisk] = useState(null);
   const [submittedRegion, setSubmittedRegion] = useState("");
   const [shake, setShake] = useState(false);
   const [backendConnected, setBackendConnected] = useState(null);
   const [responseRegions, setResponseRegions] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-
 
   async function handlePredict() {
     if (!region.trim()) {
@@ -322,21 +358,19 @@ export default function App() {
     const requestPayload = { region: region.trim() };
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/predict` : "/api/predict";
+      const apiUrl = import.meta.env.VITE_API_URL
+        ? `${import.meta.env.VITE_API_URL}/predict`
+        : "/api/predict";
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestPayload),
       });
 
-      if (!response.ok) {
-        throw new Error(`backend status ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`backend status ${response.status}`);
 
       const data = await response.json();
-      if (!data || typeof data.risk !== "string") {
-        throw new Error("invalid backend payload");
-      }
+      if (!data || typeof data.risk !== "string") throw new Error("invalid backend payload");
 
       setBackendConnected(true);
       setRisk(data.risk);
@@ -361,97 +395,87 @@ export default function App() {
     risk === "Low"    ? "badge badge-low"    :
                         "badge badge-none";
 
-  if (page === "landing") {
-    return <Landing setPage={setPage} />;
-  }
-
-  if (page === "signup") {
-    return <Signup setPage={setPage} />;
-  }
-
-  if (page === "login") {
-    return <Login setPage={setPage} />;
-  }
+  if (page === "landing") return <Landing setPage={setPage} />;
+  if (page === "signup")  return <Signup setPage={setPage} />;
+  if (page === "login")   return <Login setPage={setPage} />;
+  if (page === "profile") return <Profile setPage={setPage} />;
 
   return (
-  <>
-    {page === "input" && (
-      <>
-        <style>{css}</style>
-        <div className="page">
-        <div className="card">
+    <>
+      <style>{css}</style>
+      <div className="page">
+        <ProfileButton setPage={setPage} />
 
-          <div className="header">
-            <div className="tag">
-              <span className="tag-dot" />
-              AI · Epidemiology
+        {page === "input" && (
+          <div className="card">
+            <div className="header">
+              <div className="tag">
+                <span className="tag-dot" />
+                AI · Epidemiology
+              </div>
+              <h1 className="title">Epidemic Spread<br /><span>Prediction</span></h1>
+              <p className="subtitle">Enter a region to assess outbreak risk</p>
             </div>
-            <h1 className="title">Epidemic Spread<br /><span>Prediction</span></h1>
-            <p className="subtitle">Enter a region to assess outbreak risk</p>
-          </div>
 
-          <hr className="divider" />
+            <hr className="divider" />
 
-          <div className={shake ? "shake" : ""}>
-            <div className="field">
-              <label>Region</label>
-              <div className="input-wrap">
-                <span className="input-icon">🌍</span>
-                <input
-                  type="text"
-                  placeholder="e.g. South Asia"
-                  value={region}
-                  onChange={(e) => {
-                    setRegion(e.target.value);
-                    setRisk(null);
-                    setBackendConnected(null);
-                    setSubmittedRegion("");
-                  }}
-                  onKeyDown={(e) => e.key === "Enter" && handlePredict()}
-                  disabled={isLoading}
-                />
+            <div className={shake ? "shake" : ""}>
+              <div className="field">
+                <label>Region</label>
+                <div className="input-wrap">
+                  <span className="input-icon">🌍</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. South Asia"
+                    value={region}
+                    onChange={(e) => {
+                      setRegion(e.target.value);
+                      setRisk(null);
+                      setBackendConnected(null);
+                      setSubmittedRegion("");
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && handlePredict()}
+                    disabled={isLoading}
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          <button className="btn" onClick={handlePredict} disabled={isLoading}>
-            ⚡ &nbsp;{isLoading ? "Loading..." : "Run Prediction"}
-          </button>
+            <button className="btn" onClick={handlePredict} disabled={isLoading}>
+              {isLoading ? "Loading..." : "Run Prediction"}
+            </button>
 
-          <div className="result-row">
-            <div className="result-left">
-              <span className="result-label">Risk Assessment</span>
-              {backendConnected === true && submittedRegion && risk ? (
-                <span className="result-region">{submittedRegion}</span>
-              ) : (
-                <span className="result-region">—</span>
-              )}
+            <div className="result-row">
+              <div className="result-left">
+                <span className="result-label">Risk Assessment</span>
+                {backendConnected === true && submittedRegion && risk ? (
+                  <span className="result-region">{submittedRegion}</span>
+                ) : (
+                  <span className="result-region">—</span>
+                )}
+              </div>
+              <span className={badgeClass}>
+                <span className="badge-dot" />
+                {backendConnected === true && risk ? risk : "—"}
+              </span>
             </div>
-            <span className={badgeClass}>
-              <span className="badge-dot" />
-              {backendConnected === true && risk ? risk : "—"}
-            </span>
-          </div>
 
-          <div className="chart-box">
-            <span className="chart-icon">📊</span>
-            <span className="chart-text">Chart will appear here</span>
+            <div className="chart-box">
+              <span className="chart-text">Chart will appear here</span>
+            </div>
           </div>
+        )}
 
-                </div>
+        {page === "dashboard" && (
+          <Dashboard
+            region={submittedRegion}
+            risk={risk}
+            backendConnected={backendConnected}
+            regions={responseRegions}
+            onBack={() => setPage("input")}
+          />
+        )}
       </div>
-      </>
-    )}
-
-    {page === "dashboard" && (
-      <Dashboard
-        region={submittedRegion}
-        risk={risk}
-        backendConnected={backendConnected}
-        regions={responseRegions}
-        onBack={() => setPage("input")}
-      />
-    )}
-  </>
-);
+    </>
+  );
 }

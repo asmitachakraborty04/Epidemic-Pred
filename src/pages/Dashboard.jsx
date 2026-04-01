@@ -2,6 +2,9 @@
 // Props from App.jsx:
 //   region  — the region/continent typed by user (e.g. "South Asia", "Europe")
 //   risk    — "High" | "Medium" | "Low"
+//   predictionTarget — "nextdaycases" | "risks"
+//   predictedCases — numeric predicted cases when available
+//   hotspotLevel — 0 | 1 | 2
 //   onBack  — optional callback to return to input page
 
 import { useState, useEffect } from "react";
@@ -201,6 +204,39 @@ const css = `
   .db-empty strong { display: block; font-size: 18px; margin-bottom: 8px; color: #3d4f6b; }
   .db-empty p { font-size: 14px; color: #2e3a52; line-height: 1.7; }
 
+  .db-case-panel {
+    background: #131929;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 18px;
+    padding: 20px;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.04) inset, 0 8px 32px rgba(0,0,0,0.4);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .db-case-item {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+
+  .db-case-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: #4b5675;
+    font-weight: 700;
+  }
+
+  .db-case-value {
+    margin-top: 6px;
+    font-size: 18px;
+    font-weight: 800;
+    color: #f1f5f9;
+  }
+
   /* Footer */
   .db-footer { text-align: center; margin-top: 48px; font-size: 11px; color: #1e2535; letter-spacing: 0.5px; }
   .db-footer span { color: #818cf8; }
@@ -324,6 +360,11 @@ const css = `
 
     .db-card {
       padding: 16px 14px;
+    }
+
+    .db-case-panel {
+      grid-template-columns: 1fr;
+      padding: 14px;
     }
   }
 `;
@@ -550,6 +591,13 @@ function toTitle(str) {
   return str.replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function getHotspotMeta(level) {
+  if (level === 2) return { label: "High Hotspot", short: "High", color: "#f87171" };
+  if (level === 1) return { label: "Watchlist Hotspot", short: "Watch", color: "#fbbf24" };
+  if (level === 0) return { label: "No Hotspot", short: "Clear", color: "#4ade80" };
+  return { label: "Unknown", short: "—", color: "#94a3b8" };
+}
+
 // ─── Pie chart (pure SVG) ─────────────────────────────────────────────
 function PieChart({ data }) {
   const SIZE  = 180;
@@ -692,7 +740,17 @@ function CountryCard({ name, flag, pct, level }) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────
-export default function Dashboard({ region, risk, backendConnected = null, regions = [], onBack }) {
+export default function Dashboard({
+  region,
+  risk,
+  predictionTarget = "risks",
+  predictedCases = null,
+  hotspotLevel = null,
+  backendConnected = null,
+  regions = [],
+  onBack,
+}) {
+  const isRiskMode = predictionTarget === "risks";
   const [chartType, setChartType] = useState("bar"); // "bar" | "pie"
   const [filter,    setFilter]    = useState("All");
   const [sort,      setSort]      = useState("risk-high");
@@ -744,9 +802,14 @@ export default function Dashboard({ region, risk, backendConnected = null, regio
   const displayTitle = backendConnected === true
     ? (region ? toTitle(region) : "Risk Prediction")
     : (resolved ? resolved.label : toTitle(region || "Unknown Region"));
+  const metricLabel = predictionTarget === "nextdaycases" ? "Next Day Cases" : "Risk Level";
+  const metricValue = predictionTarget === "nextdaycases"
+    ? (typeof predictedCases === "number" ? Math.round(predictedCases).toLocaleString() : "—")
+    : (risk || "—");
+  const hotspotMeta = getHotspotMeta(hotspotLevel);
 
   const notFound = backendConnected === true ? false : !resolved;
-  const showResult = backendConnected === true && Boolean(risk);
+  const showResult = backendConnected === true && (isRiskMode ? Boolean(risk) : typeof predictedCases === "number");
 
   const SUPPORTED = Object.keys(REGION_DATA).map(toTitle).join(", ");
 
@@ -777,8 +840,10 @@ export default function Dashboard({ region, risk, backendConnected = null, regio
                 : notFound
                   ? `Region not found. Try: South Asia, Europe, Middle East, West Africa…`
                   : showResult
-                    ? `Backend response received: risk = ${risk}. A detailed chart follows.`
-                    : `${allData.length} countries · epidemic risk is simulated`}
+                    ? `Prediction complete: ${metricLabel} = ${metricValue}. Hotspot detection: ${hotspotMeta.label}.`
+                    : (isRiskMode
+                      ? `${allData.length} countries · epidemic risk is simulated`
+                      : "Projected next day cases and hotspot detection are shown below.")}
             </p>
           </div>
 
@@ -796,11 +861,23 @@ export default function Dashboard({ region, risk, backendConnected = null, regio
               {backendConnected !== false && (
                 <div className="db-summary">
                   {[
-                    { label: "Countries",   value: allData.length, color: "#818cf8" },
-                    { label: "High Risk",   value: high,           color: "#f87171" },
-                    { label: "Medium Risk", value: medium,         color: "#fbbf24" },
-                    { label: "Low Risk",    value: low,            color: "#4ade80" },
-                    { label: "Avg Risk",    value: `${avg}%`,      color: "#a78bfa" },
+                    ...(isRiskMode
+                      ? [
+                          { label: "Type",        value: "Risks",        color: "#60a5fa" },
+                          { label: metricLabel,    value: metricValue,      color: "#fbbf24" },
+                          { label: "Hotspot",     value: hotspotMeta.short, color: hotspotMeta.color },
+                          { label: "Countries",   value: allData.length,   color: "#818cf8" },
+                          { label: "High Risk",   value: high,             color: "#f87171" },
+                          { label: "Medium Risk", value: medium,           color: "#fbbf24" },
+                          { label: "Low Risk",    value: low,              color: "#4ade80" },
+                          { label: "Avg Risk",    value: `${avg}%`,        color: "#a78bfa" },
+                        ]
+                      : [
+                          { label: "Type",           value: "Cases", color: "#60a5fa" },
+                          { label: "Next Day Cases", value: metricValue, color: "#22d3ee" },
+                          { label: "Hotspot",        value: hotspotMeta.short, color: hotspotMeta.color },
+                          { label: "Region",         value: displayTitle, color: "#818cf8" },
+                        ]),
                   ].map(s => (
                     <div className="db-stat" key={s.label}>
                       <span className="db-stat-value" style={{ color: s.color }}>{s.value}</span>
@@ -817,27 +894,39 @@ export default function Dashboard({ region, risk, backendConnected = null, regio
                 </div>
               )}
 
-              {/* Chart section */}
-              <div className="db-chart-wrap">
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-                  <p className="db-chart-title">Risk Distribution — {displayTitle}</p>
-                  <div className="db-chart-toggle">
-                    <button className={`db-toggle-btn${chartType === "bar" ? " active" : ""}`} onClick={() => setChartType("bar")}>
-                      ▬ Bar
-                    </button>
-                    <button className={`db-toggle-btn${chartType === "pie" ? " active" : ""}`} onClick={() => setChartType("pie")}>
-                      ◉ Pie
-                    </button>
+              {isRiskMode ? (
+                <div className="db-chart-wrap">
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+                    <p className="db-chart-title">Risk Distribution — {displayTitle}</p>
+                    <div className="db-chart-toggle">
+                      <button className={`db-toggle-btn${chartType === "bar" ? " active" : ""}`} onClick={() => setChartType("bar")}>
+                        ▬ Bar
+                      </button>
+                      <button className={`db-toggle-btn${chartType === "pie" ? " active" : ""}`} onClick={() => setChartType("pie")}>
+                        ◉ Pie
+                      </button>
+                    </div>
+                  </div>
+
+                  {chartType === "bar"
+                    ? <BarChart data={allData} />
+                    : <PieChart data={allData} />
+                  }
+                </div>
+              ) : (
+                <div className="db-case-panel">
+                  <div className="db-case-item">
+                    <div className="db-case-label">Projected Next Day Cases</div>
+                    <div className="db-case-value">{metricValue}</div>
+                  </div>
+                  <div className="db-case-item">
+                    <div className="db-case-label">Hotspot Detection</div>
+                    <div className="db-case-value" style={{ color: hotspotMeta.color }}>{hotspotMeta.label}</div>
                   </div>
                 </div>
+              )}
 
-                {chartType === "bar"
-                  ? <BarChart data={allData} />
-                  : <PieChart data={allData} />
-                }
-              </div>
-
-              {backendConnected !== false && (
+              {backendConnected !== false && isRiskMode && (
                 <>
                   {/* Filter + sort */}
                   <div className="db-filter-bar">

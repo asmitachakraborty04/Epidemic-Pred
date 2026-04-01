@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import Landing from "./Landing";
 import Dashboard from "./Dashboard";
@@ -10,6 +10,27 @@ const USERS_STORAGE_KEY = "outbreakx.users";
 const CURRENT_USER_STORAGE_KEY = "outbreakx.currentUserEmail";
 const API_BASE_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 const API_KEY = (import.meta.env.VITE_API_KEY || "").trim();
+const REGION_OPTIONS = [
+  "South Asia",
+  "Southeast Asia",
+  "East Asia",
+  "Europe",
+  "Middle East",
+  "West Africa",
+  "East Africa",
+  "North Africa",
+  "Southern Africa",
+  "Central Africa",
+  "North America",
+  "South America",
+  "Central Asia",
+  "Caribbean",
+  "Oceania",
+];
+const PREDICTION_TYPE_OPTIONS = [
+  { value: "nextdaycases", label: "Next Day Cases" },
+  { value: "risks", label: "Risk Level" },
+];
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -128,6 +149,22 @@ function readApiErrorMessage(error, fallbackMessage) {
 function upsertUser(prevUsers, nextUser) {
   const withoutUser = prevUsers.filter((user) => user.email !== nextUser.email);
   return [...withoutUser, nextUser];
+}
+
+function getHotspotMeta(level) {
+  if (level === 2) {
+    return { label: "High Hotspot", short: "High", color: "#f87171" };
+  }
+
+  if (level === 1) {
+    return { label: "Watchlist Hotspot", short: "Watch", color: "#fbbf24" };
+  }
+
+  if (level === 0) {
+    return { label: "No Hotspot", short: "Clear", color: "#4ade80" };
+  }
+
+  return { label: "Unknown", short: "—", color: "#94a3b8" };
 }
 
 const css = `
@@ -318,6 +355,100 @@ const css = `
     box-shadow: 0 0 0 3px rgba(248,113,113,0.12);
   }
 
+  .dropdown {
+    position: relative;
+  }
+
+  .dropdown-trigger {
+    width: 100%;
+    min-height: 46px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    color: #e2e8f0;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: 'Inter', sans-serif;
+    text-align: left;
+    padding: 11px 36px 11px 38px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  }
+
+  .dropdown.is-open .dropdown-trigger,
+  .dropdown-trigger:focus-visible {
+    border-color: rgba(99,102,241,0.5);
+    background: rgba(99,102,241,0.06);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+    outline: none;
+  }
+
+  .dropdown.input-error .dropdown-trigger {
+    border-color: rgba(248,113,113,0.65);
+    background: rgba(248,113,113,0.08);
+    box-shadow: 0 0 0 3px rgba(248,113,113,0.12);
+  }
+
+  .dropdown-value {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dropdown-value.placeholder {
+    color: #2e3a52;
+  }
+
+  .dropdown-caret {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #4b5675;
+    pointer-events: none;
+    font-size: 11px;
+  }
+
+  .dropdown-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 8px);
+    background: #161d2e;
+    border: 1px solid rgba(129,140,248,0.28);
+    border-radius: 12px;
+    box-shadow: 0 16px 34px rgba(0,0,0,0.5);
+    z-index: 50;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 6px;
+  }
+
+  .dropdown-option {
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    color: #e2e8f0;
+    font-size: 13px;
+    font-family: 'Inter', sans-serif;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .dropdown-option:hover {
+    background: rgba(129,140,248,0.18);
+    color: #c7d2fe;
+  }
+
+  .dropdown-option.active {
+    background: rgba(129,140,248,0.24);
+    color: #eef2ff;
+  }
+
   .field-error {
     margin-top: 8px;
     font-size: 12px;
@@ -366,6 +497,24 @@ const css = `
     filter: none;
     transform: none;
     box-shadow: 0 4px 14px rgba(99,102,241,0.2);
+  }
+
+  .btn-secondary {
+    margin-top: 12px;
+    background: rgba(129,140,248,0.14);
+    border: 1px solid rgba(129,140,248,0.3);
+    color: #a5b4fc;
+    box-shadow: none;
+  }
+
+  .btn-secondary::after {
+    display: none;
+  }
+
+  .btn-secondary:hover {
+    background: rgba(129,140,248,0.22);
+    filter: none;
+    box-shadow: 0 8px 22px rgba(129,140,248,0.2);
   }
 
   .result-row {
@@ -422,6 +571,8 @@ const css = `
   .badge-low    .badge-dot { background: #4ade80; }
   .badge-none   { background: rgba(255,255,255,0.04); color: #3d4f6b; border: 1px solid rgba(255,255,255,0.06); }
   .badge-none   .badge-dot { background: #3d4f6b; }
+  .badge-case   { background: rgba(34,211,238,0.12); color: #67e8f9; border: 1px solid rgba(34,211,238,0.3); }
+  .badge-case   .badge-dot { background: #67e8f9; }
 
   .chart-box {
     margin-top: 20px;
@@ -458,6 +609,35 @@ const css = `
     text-transform: uppercase;
     position: relative;
     z-index: 1;
+  }
+
+  .metric-grid {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .metric-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+
+  .metric-label {
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: #4b5675;
+    font-weight: 600;
+  }
+
+  .metric-value {
+    margin-top: 4px;
+    font-size: 15px;
+    color: #f1f5f9;
+    font-weight: 700;
   }
 
   @keyframes shake {
@@ -609,6 +789,10 @@ const css = `
       height: 128px;
     }
 
+    .metric-grid {
+      grid-template-columns: 1fr;
+    }
+
     .toast-stack {
       left: 10px;
       right: 10px;
@@ -674,8 +858,13 @@ function ToastStack({ toasts, onDismiss }) {
 
 export default function App() {
   const [region, setRegion] = useState("");
+  const [predictionTarget, setPredictionTarget] = useState("risks");
+  const [lastCompletedPredictionTarget, setLastCompletedPredictionTarget] = useState(null);
   const [page, setPage] = useState("landing");
   const [risk, setRisk] = useState(null);
+  const [predictedCases, setPredictedCases] = useState(null);
+  const [riskScore, setRiskScore] = useState(null);
+  const [hotspotLevel, setHotspotLevel] = useState(null);
   const [submittedRegion, setSubmittedRegion] = useState("");
   const [shake, setShake] = useState(false);
   const [backendConnected, setBackendConnected] = useState(null);
@@ -685,6 +874,10 @@ export default function App() {
   const [toasts, setToasts] = useState([]);
   const [users, setUsers] = useState(() => loadStoredUsers());
   const [currentUserEmail, setCurrentUserEmail] = useState(() => loadStoredCurrentUserEmail());
+  const [isRegionOpen, setIsRegionOpen] = useState(false);
+  const [isPredictionTypeOpen, setIsPredictionTypeOpen] = useState(false);
+  const regionDropdownRef = useRef(null);
+  const predictionDropdownRef = useRef(null);
 
   const currentUser = users.find((user) => user.email === currentUserEmail) || null;
 
@@ -739,6 +932,24 @@ export default function App() {
       isCancelled = true;
     };
   }, [currentUserEmail]);
+
+  useEffect(() => {
+    function handleOutsideClick(event) {
+      if (regionDropdownRef.current && !regionDropdownRef.current.contains(event.target)) {
+        setIsRegionOpen(false);
+      }
+      if (predictionDropdownRef.current && !predictionDropdownRef.current.contains(event.target)) {
+        setIsPredictionTypeOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, []);
 
   function removeToast(toastId) {
     setToasts((prev) => prev.filter((toast) => toast.id !== toastId));
@@ -896,10 +1107,10 @@ export default function App() {
 
   async function handlePredict() {
     if (!region.trim()) {
-      setRegionError("Please enter a region to run prediction.");
+      setRegionError("Please select a region to start the outbreak assessment.");
       setShake(true);
       setTimeout(() => setShake(false), 400);
-      addToast("Region is required before running prediction.", "error");
+      addToast("Select a region before starting the assessment.", "error");
       return;
     }
 
@@ -919,9 +1130,16 @@ export default function App() {
 
       setBackendConnected(true);
       setRisk(data.risk);
+      setPredictedCases(typeof data.predicted_cases === "number" ? data.predicted_cases : null);
+      const firstRegionRisk = Array.isArray(data.regions) && data.regions[0] && typeof data.regions[0].risk === "number"
+        ? data.regions[0].risk
+        : null;
+      setRiskScore(firstRegionRisk);
+      setHotspotLevel(Number.isInteger(data.hotspot_level) ? data.hotspot_level : null);
       const resolvedRegion = data.region || requestPayload.region;
       setSubmittedRegion(resolvedRegion);
       setResponseRegions(Array.isArray(data.regions) ? data.regions : null);
+      setLastCompletedPredictionTarget(predictionTarget);
 
       if (currentUserEmail) {
         setUsers((prev) =>
@@ -940,14 +1158,17 @@ export default function App() {
         await syncPredictionToUser(currentUserEmail, resolvedRegion, data.risk);
       }
 
-      addToast(`Prediction ready for ${resolvedRegion}.`, "success");
-      setPage("dashboard");
+      addToast(`Outbreak assessment ready for ${resolvedRegion}.`, "success");
     } catch (error) {
       console.error("Backend prediction failed", error);
       setBackendConnected(false);
       setRisk(null);
+      setPredictedCases(null);
+      setRiskScore(null);
+      setHotspotLevel(null);
       setSubmittedRegion(requestPayload.region);
       setResponseRegions(null);
+      setLastCompletedPredictionTarget(null);
 
       if (currentUserEmail) {
         setUsers((prev) =>
@@ -966,18 +1187,34 @@ export default function App() {
         await syncPredictionToUser(currentUserEmail, requestPayload.region, "Unavailable");
       }
 
-      addToast("Backend unavailable. Showing fallback dashboard.", "error");
-      setPage("dashboard");
+      addToast("Backend unavailable. Please try again.", "error");
     } finally {
       setIsLoading(false);
     }
   }
 
-  const badgeClass =
+  const isRiskMode = predictionTarget === "risks";
+  const riskBadgeClass =
     risk === "High"   ? "badge badge-high"   :
     risk === "Medium" ? "badge badge-medium" :
     risk === "Low"    ? "badge badge-low"    :
                         "badge badge-none";
+  const badgeClass = isRiskMode ? riskBadgeClass : "badge badge-case";
+  const hotspotMeta = getHotspotMeta(hotspotLevel);
+  const hasCurrentModeResult =
+    backendConnected === true &&
+    !!submittedRegion &&
+    lastCompletedPredictionTarget === predictionTarget;
+  const predictionTypeLabel =
+    PREDICTION_TYPE_OPTIONS.find((option) => option.value === predictionTarget)?.label || "Risk Level";
+  const selectedMetricLabel = predictionTarget === "nextdaycases" ? "Next Day Cases" : "Risk Level";
+  const runAssessmentLabel = isRiskMode ? "Assess Outbreak Risk" : "Forecast Next-Day Cases";
+  const trendHelperText = isRiskMode
+    ? "Start the assessment to view detailed regional risk trends"
+    : "Start the forecast to view detailed next-day case trends";
+  const selectedMetricValue = predictionTarget === "nextdaycases"
+    ? (hasCurrentModeResult && typeof predictedCases === "number" ? Math.round(predictedCases).toLocaleString() : "—")
+    : (hasCurrentModeResult && risk ? risk : "—");
 
   let pageContent;
 
@@ -1026,36 +1263,117 @@ export default function App() {
             <div className={shake ? "shake" : ""}>
               <div className="field">
                 <label>Region</label>
-                <div className="input-wrap">
+                <div
+                  className={`dropdown ${isRegionOpen ? "is-open" : ""} ${regionError ? "input-error" : ""}`}
+                  ref={regionDropdownRef}
+                >
                   <span className="input-icon">🌍</span>
-                  <input
-                    type="text"
-                    placeholder="e.g. South Asia"
-                    value={region}
-                    className={regionError ? "input-error" : ""}
-                    onChange={(e) => {
-                      setRegion(e.target.value);
-                      setRisk(null);
-                      setBackendConnected(null);
-                      setSubmittedRegion("");
-                      setRegionError("");
+                  <button
+                    type="button"
+                    className="dropdown-trigger"
+                    onClick={() => {
+                      if (isLoading) return;
+                      setIsRegionOpen((prev) => !prev);
+                      setIsPredictionTypeOpen(false);
                     }}
-                    onKeyDown={(e) => e.key === "Enter" && handlePredict()}
                     disabled={isLoading}
-                  />
+                  >
+                    <span className={`dropdown-value ${!region ? "placeholder" : ""}`}>
+                      {region || "Select a region"}
+                    </span>
+                  </button>
+                  <span className="dropdown-caret">{isRegionOpen ? "▲" : "▼"}</span>
+                  {isRegionOpen && (
+                    <div className="dropdown-menu">
+                      {REGION_OPTIONS.map((regionName) => (
+                        <button
+                          key={regionName}
+                          type="button"
+                          className={`dropdown-option ${regionName === region ? "active" : ""}`}
+                          onClick={() => {
+                            setRegion(regionName);
+                            setRisk(null);
+                            setPredictedCases(null);
+                            setRiskScore(null);
+                            setHotspotLevel(null);
+                            setBackendConnected(null);
+                            setLastCompletedPredictionTarget(null);
+                            setSubmittedRegion("");
+                            setResponseRegions(null);
+                            setRegionError("");
+                            setIsRegionOpen(false);
+                          }}
+                        >
+                          {regionName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {regionError && <p className="field-error">{regionError}</p>}
+              </div>
+
+              <div className="field">
+                <label>Prediction Type</label>
+                <div
+                  className={`dropdown ${isPredictionTypeOpen ? "is-open" : ""}`}
+                  ref={predictionDropdownRef}
+                >
+                  <span className="input-icon">🎯</span>
+                  <button
+                    type="button"
+                    className="dropdown-trigger"
+                    onClick={() => {
+                      if (isLoading) return;
+                      setIsPredictionTypeOpen((prev) => !prev);
+                      setIsRegionOpen(false);
+                    }}
+                    disabled={isLoading}
+                  >
+                    <span className="dropdown-value">{predictionTypeLabel}</span>
+                  </button>
+                  <span className="dropdown-caret">{isPredictionTypeOpen ? "▲" : "▼"}</span>
+                  {isPredictionTypeOpen && (
+                    <div className="dropdown-menu">
+                      {PREDICTION_TYPE_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`dropdown-option ${option.value === predictionTarget ? "active" : ""}`}
+                          onClick={() => {
+                            if (option.value === predictionTarget) {
+                              setIsPredictionTypeOpen(false);
+                              return;
+                            }
+                            setPredictionTarget(option.value);
+                            setRisk(null);
+                            setPredictedCases(null);
+                            setRiskScore(null);
+                            setHotspotLevel(null);
+                            setBackendConnected(null);
+                            setLastCompletedPredictionTarget(null);
+                            setSubmittedRegion("");
+                            setResponseRegions(null);
+                            setIsPredictionTypeOpen(false);
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             <button className="btn" onClick={handlePredict} disabled={isLoading}>
-              {isLoading ? "Loading..." : "Run Prediction"}
+              {isLoading ? "Analyzing..." : runAssessmentLabel}
             </button>
 
             <div className="result-row">
               <div className="result-left">
-                <span className="result-label">Risk Assessment</span>
-                {backendConnected === true && submittedRegion && risk ? (
+                <span className="result-label">{selectedMetricLabel}</span>
+                {hasCurrentModeResult ? (
                   <span className="result-region">{submittedRegion}</span>
                 ) : (
                   <span className="result-region">—</span>
@@ -1063,13 +1381,41 @@ export default function App() {
               </div>
               <span className={badgeClass}>
                 <span className="badge-dot" />
-                {backendConnected === true && risk ? risk : "—"}
+                {selectedMetricValue}
               </span>
             </div>
 
-            <div className="chart-box">
-              <span className="chart-text">Chart will appear here</span>
+            <div className="metric-grid">
+              <div className="metric-card">
+                <div className="metric-label">Hotspot Detection</div>
+                <div className="metric-value" style={{ color: hotspotMeta.color }}>{hasCurrentModeResult ? hotspotMeta.label : "—"}</div>
+              </div>
+              {isRiskMode ? (
+                <div className="metric-card">
+                  <div className="metric-label">Risk Score</div>
+                  <div className="metric-value">
+                    {hasCurrentModeResult && typeof riskScore === "number" ? `${Math.round(riskScore)}%` : "—"}
+                  </div>
+                </div>
+              ) : (
+                <div className="metric-card">
+                  <div className="metric-label">Projected Cases</div>
+                  <div className="metric-value">
+                    {hasCurrentModeResult && typeof predictedCases === "number" ? Math.round(predictedCases).toLocaleString() : "—"}
+                  </div>
+                </div>
+              )}
             </div>
+
+            <div className="chart-box">
+              <span className="chart-text">{trendHelperText}</span>
+            </div>
+
+            {hasCurrentModeResult && (
+              <button className="btn btn-secondary" onClick={() => setPage("dashboard")} type="button">
+                Open Detailed Dashboard
+              </button>
+            )}
           </div>
         )}
 
@@ -1077,6 +1423,9 @@ export default function App() {
           <Dashboard
             region={submittedRegion}
             risk={risk}
+            predictionTarget={predictionTarget}
+            predictedCases={predictedCases}
+            hotspotLevel={hotspotLevel}
             backendConnected={backendConnected}
             regions={responseRegions}
             onBack={() => setPage("input")}

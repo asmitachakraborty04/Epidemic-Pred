@@ -203,7 +203,7 @@ export default function Signup({ setPage, onNotify, onSignup }) {
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
-      onNotify?.("Please correct the highlighted signup fields.", "error");
+      onNotify?.("Please fill in the highlighted fields and try again.", "error");
       return;
     }
 
@@ -217,9 +217,9 @@ export default function Signup({ setPage, onNotify, onSignup }) {
       const fieldName = signupResult?.field === "name" ? "name" : "email";
       setErrors((prev) => ({
         ...prev,
-        [fieldName]: signupResult?.error || "Unable to create account.",
+        [fieldName]: signupResult?.error || "We could not create your account right now.",
       }));
-      onNotify?.(signupResult?.error || "Unable to create account.", "error");
+      onNotify?.(signupResult?.error || "We could not create your account right now. Please try again.", "error");
       return;
     }
 

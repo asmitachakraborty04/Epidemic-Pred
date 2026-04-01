@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const styles = {
   page: {
     minHeight: "100vh",
@@ -93,6 +95,22 @@ const styles = {
     transition: "border-color 0.2s, box-shadow 0.2s",
     boxSizing: "border-box",
   },
+  inputError: {
+    borderColor: "rgba(248,113,113,0.75)",
+    background: "rgba(248,113,113,0.08)",
+    boxShadow: "0 0 0 3px rgba(248,113,113,0.12)",
+  },
+  errorText: {
+    marginTop: "6px",
+    color: "#fca5a5",
+    fontSize: "12px",
+    lineHeight: 1.35,
+  },
+  helperText: {
+    marginTop: "6px",
+    color: "#64748b",
+    fontSize: "12px",
+  },
   button: {
     width: "100%",
     background: "linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)",
@@ -122,14 +140,92 @@ const styles = {
   },
 };
 
-export default function Signup({ setPage }) {
+export default function Signup({ setPage, onNotify, onSignup }) {
   const [hover, setHover] = useState(false);
   const [focused, setFocused] = useState(null);
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [errors, setErrors] = useState({});
 
   const focusStyle = (name) =>
     focused === name
       ? { borderColor: "rgba(14,165,233,0.6)", boxShadow: "0 0 0 3px rgba(14,165,233,0.12)" }
       : {};
+
+  function inputStyle(name) {
+    return {
+      ...styles.input,
+      ...focusStyle(name),
+      ...(errors[name] ? styles.inputError : {}),
+    };
+  }
+
+  function updateField(name, value) {
+    setForm((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  }
+
+  function handleSignup() {
+    const nextErrors = {};
+
+    if (!form.name.trim()) {
+      nextErrors.name = "Full name is required.";
+    } else if (form.name.trim().length < 2) {
+      nextErrors.name = "Name must be at least 2 characters.";
+    }
+
+    if (!form.email.trim()) {
+      nextErrors.email = "Email is required.";
+    } else if (!EMAIL_REGEX.test(form.email.trim())) {
+      nextErrors.email = "Please enter a valid email address.";
+    }
+
+    if (!form.password) {
+      nextErrors.password = "Password is required.";
+    } else if (form.password.length < 8) {
+      nextErrors.password = "Password must be at least 8 characters.";
+    } else if (!/[A-Z]/.test(form.password) || !/[0-9]/.test(form.password)) {
+      nextErrors.password = "Include at least one uppercase letter and one number.";
+    }
+
+    if (!form.confirmPassword) {
+      nextErrors.confirmPassword = "Please confirm your password.";
+    } else if (form.password !== form.confirmPassword) {
+      nextErrors.confirmPassword = "Passwords do not match.";
+    }
+
+    setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      onNotify?.("Please correct the highlighted signup fields.", "error");
+      return;
+    }
+
+    const signupResult = onSignup?.({
+      name: form.name,
+      email: form.email,
+      password: form.password,
+    });
+
+    if (!signupResult?.ok) {
+      const fieldName = signupResult?.field === "name" ? "name" : "email";
+      setErrors((prev) => ({
+        ...prev,
+        [fieldName]: signupResult?.error || "Unable to create account.",
+      }));
+      onNotify?.(signupResult?.error || "Unable to create account.", "error");
+      return;
+    }
+
+    onNotify?.("Your account has been created successfully.", "success");
+    setPage("input");
+  }
 
   return (
     <div style={styles.page}>
@@ -181,11 +277,14 @@ export default function Signup({ setPage }) {
               <input
                 type="text"
                 placeholder="Jane Doe"
-                style={{ ...styles.input, ...focusStyle("name") }}
+                style={inputStyle("name")}
+                value={form.name}
                 onFocus={() => setFocused("name")}
                 onBlur={() => setFocused(null)}
+                onChange={(e) => updateField("name", e.target.value)}
               />
             </div>
+            {errors.name && <p style={styles.errorText}>{errors.name}</p>}
           </div>
 
           {/* Email */}
@@ -196,11 +295,14 @@ export default function Signup({ setPage }) {
               <input
                 type="email"
                 placeholder="jane@example.com"
-                style={{ ...styles.input, ...focusStyle("email") }}
+                style={inputStyle("email")}
+                value={form.email}
                 onFocus={() => setFocused("email")}
                 onBlur={() => setFocused(null)}
+                onChange={(e) => updateField("email", e.target.value)}
               />
             </div>
+            {errors.email && <p style={styles.errorText}>{errors.email}</p>}
           </div>
 
           {/* Password */}
@@ -211,11 +313,36 @@ export default function Signup({ setPage }) {
               <input
                 type="password"
                 placeholder="••••••••"
-                style={{ ...styles.input, ...focusStyle("pass") }}
-                onFocus={() => setFocused("pass")}
+                style={inputStyle("password")}
+                value={form.password}
+                onFocus={() => setFocused("password")}
                 onBlur={() => setFocused(null)}
+                onChange={(e) => updateField("password", e.target.value)}
               />
             </div>
+            {errors.password ? (
+              <p style={styles.errorText}>{errors.password}</p>
+            ) : (
+              <p style={styles.helperText}>Use at least 8 characters, 1 uppercase letter, and 1 number.</p>
+            )}
+          </div>
+
+          {/* Confirm Password */}
+          <div>
+            <label style={styles.label}>Confirm Password</label>
+            <div style={styles.inputWrap}>
+              <span style={styles.icon}>✅</span>
+              <input
+                type="password"
+                placeholder="••••••••"
+                style={inputStyle("confirmPassword")}
+                value={form.confirmPassword}
+                onFocus={() => setFocused("confirmPassword")}
+                onBlur={() => setFocused(null)}
+                onChange={(e) => updateField("confirmPassword", e.target.value)}
+              />
+            </div>
+            {errors.confirmPassword && <p style={styles.errorText}>{errors.confirmPassword}</p>}
           </div>
         </div>
 
@@ -232,33 +359,10 @@ export default function Signup({ setPage }) {
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
           type="button"
-          onClick={() => {
-            // Handle sign up logic here
-            console.log("Sign up clicked");
-          }}
+          onClick={handleSignup}
         >
           Sign Up →
         </button>
-
-        {/* Back to Landing */}
-        <div style={{ marginBottom: 12, textAlign: 'center' }}>
-          <button
-            style={{
-              ...styles.link,
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-            type="button"
-            onClick={() => setPage("landing")}
-          >
-            ← Back to Landing
-          </button>
-        </div>
 
         {/* Footer */}
         <p style={styles.footer}>

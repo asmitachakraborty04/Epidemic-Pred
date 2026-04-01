@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
@@ -397,16 +397,7 @@ const css = `
   }
 `;
 
-const USER = {
-  name: "Alex Mercer",
-  initials: "AM",
-  email: "alex.mercer@epidemicai.io",
-  region: "South Asia",
-  lastPrediction: "High Risk",
-  accountStatus: "Active",
-  predictionsCount: 24,
-  lastLogin: "Today, 09:42 AM",
-};
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function InfoCard({ icon, iconClass, label, value, isStatus }) {
   return (
@@ -422,26 +413,88 @@ function InfoCard({ icon, iconClass, label, value, isStatus }) {
   );
 }
 
-export default function Profile({ setPage }) {
+export default function Profile({ setPage, currentUser, onNotify, onSaveProfile, onLogout }) {
   const [editMode, setEditMode] = useState(false);
-  const [name, setName] = useState(USER.name);
-  const [email, setEmail] = useState(USER.email);
-  const [draft, setDraft] = useState({ name: USER.name, email: USER.email });
+  const [draft, setDraft] = useState({ name: "", email: "" });
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  useEffect(() => {
+    setDraft({
+      name: currentUser?.name || "",
+      email: currentUser?.email || "",
+    });
+    setEditMode(false);
+    setFieldErrors({});
+  }, [currentUser?.name, currentUser?.email]);
+
+  const displayName = currentUser?.name || "Guest User";
+  const displayEmail = currentUser?.email || "No active account";
+  const displayRegion = currentUser?.region || "Not selected";
+  const displayPrediction = currentUser?.lastPrediction || "No predictions yet";
+  const displayAccountStatus = currentUser?.accountStatus || "Signed Out";
+  const displayPredictionsCount = currentUser?.predictionsCount ?? 0;
+  const displayLastLogin = currentUser?.lastLogin || "No session recorded";
 
   function handleEdit() {
-    setDraft({ name, email });
+    if (!currentUser) {
+      onNotify?.("Please sign in to edit your profile.", "error");
+      return;
+    }
+
+    setDraft({ name: currentUser.name || "", email: currentUser.email || "" });
+    setFieldErrors({});
     setEditMode(true);
   }
 
   function handleSave() {
-    setName(draft.name || name);
-    setEmail(draft.email || email);
+    const nextErrors = {};
+
+    if (!draft.name.trim()) {
+      nextErrors.name = "Name is required.";
+    }
+
+    if (!draft.email.trim()) {
+      nextErrors.email = "Email is required.";
+    } else if (!EMAIL_REGEX.test(draft.email.trim())) {
+      nextErrors.email = "Please enter a valid email address.";
+    }
+
+    setFieldErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      onNotify?.("Please correct the highlighted profile fields.", "error");
+      return;
+    }
+
+    const saveResult = onSaveProfile?.({
+      name: draft.name.trim(),
+      email: draft.email.trim(),
+    });
+
+    if (!saveResult?.ok) {
+      if (saveResult?.field) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          [saveResult.field]: saveResult.error || "Unable to update this field.",
+        }));
+      }
+      onNotify?.(saveResult?.error || "Unable to save profile changes.", "error");
+      return;
+    }
+
     setEditMode(false);
+    onNotify?.("Profile updated successfully.", "success");
   }
 
   function handleLogout() {
-    if (typeof setPage === "function") setPage("landing");
-    else alert("Logging out…");
+    if (typeof onLogout === "function") {
+      onLogout();
+      return;
+    }
+
+    if (typeof setPage === "function") {
+      setPage("landing");
+    }
   }
 
   return (
@@ -463,7 +516,12 @@ export default function Profile({ setPage }) {
           <div className="hero-card">
             <div className="avatar-wrap">
               <div className="avatar">
-                {name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                {displayName
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase()}
               </div>
               <div className="avatar-ring" />
             </div>
@@ -473,10 +531,17 @@ export default function Profile({ setPage }) {
                 <>
                   <input
                     value={draft.name}
-                    onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+                    onChange={(e) => {
+                      setDraft((d) => ({ ...d, name: e.target.value }));
+                      if (fieldErrors.name) {
+                        setFieldErrors((prev) => ({ ...prev, name: "" }));
+                      }
+                    }}
                     style={{
                       background: "rgba(255,255,255,0.06)",
-                      border: "1px solid rgba(99,102,241,0.4)",
+                      border: fieldErrors.name
+                        ? "1px solid rgba(248,113,113,0.75)"
+                        : "1px solid rgba(99,102,241,0.4)",
                       borderRadius: 10,
                       color: "#f0f4ff",
                       fontSize: 17,
@@ -488,12 +553,22 @@ export default function Profile({ setPage }) {
                       marginBottom: 8,
                     }}
                   />
+                  {fieldErrors.name && (
+                    <p style={{ fontSize: 12, color: "#fca5a5", marginBottom: 8 }}>{fieldErrors.name}</p>
+                  )}
                   <input
                     value={draft.email}
-                    onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}
+                    onChange={(e) => {
+                      setDraft((d) => ({ ...d, email: e.target.value }));
+                      if (fieldErrors.email) {
+                        setFieldErrors((prev) => ({ ...prev, email: "" }));
+                      }
+                    }}
                     style={{
                       background: "rgba(255,255,255,0.04)",
-                      border: "1px solid rgba(255,255,255,0.1)",
+                      border: fieldErrors.email
+                        ? "1px solid rgba(248,113,113,0.75)"
+                        : "1px solid rgba(255,255,255,0.1)",
                       borderRadius: 10,
                       color: "#6b80a0",
                       fontSize: 13,
@@ -504,16 +579,19 @@ export default function Profile({ setPage }) {
                       marginBottom: 12,
                     }}
                   />
+                  {fieldErrors.email && (
+                    <p style={{ fontSize: 12, color: "#fca5a5", marginBottom: 8 }}>{fieldErrors.email}</p>
+                  )}
                 </>
               ) : (
                 <>
-                  <div className="hero-name">{name}</div>
-                  <div className="hero-email">{email}</div>
+                  <div className="hero-name">{displayName}</div>
+                  <div className="hero-email">{displayEmail}</div>
                 </>
               )}
               <div className="hero-role-tag">
                 <span className="hero-role-tag-dot" />
-                User
+                {currentUser ? "User" : "Guest"}
               </div>
             </div>
           </div>
@@ -524,27 +602,27 @@ export default function Profile({ setPage }) {
               icon="🌍"
               iconClass="icon-purple"
               label="Region Selected"
-              value={USER.region}
+              value={displayRegion}
             />
             <InfoCard
               icon="⚠️"
               iconClass="icon-amber"
               label="Last Prediction"
-              value={USER.lastPrediction}
+              value={displayPrediction}
             />
             <InfoCard
               icon="✦"
               iconClass="icon-green"
               label="Account Status"
-              value={USER.accountStatus}
-              isStatus
+              value={displayAccountStatus}
+              isStatus={String(displayAccountStatus).toLowerCase() === "active"}
             />
           </div>
 
           {/* Stats */}
           <div className="stats-row">
             <div className="stat-card">
-              <div className="stat-number">{USER.predictionsCount}</div>
+              <div className="stat-number">{displayPredictionsCount}</div>
               <div className="stat-right">
                 <div className="stat-label">Predictions Made</div>
                 <div className="stat-sub">Since account creation</div>
@@ -552,7 +630,7 @@ export default function Profile({ setPage }) {
             </div>
             <div className="stat-card">
               <div className="stat-number" style={{ fontSize: 20, letterSpacing: "-0.5px", lineHeight: 1.2 }}>
-                {USER.lastLogin}
+                {displayLastLogin}
               </div>
               <div className="stat-right">
                 <div className="stat-label">Last Login</div>
@@ -565,12 +643,36 @@ export default function Profile({ setPage }) {
 
           {/* Buttons */}
           <div className="btn-row">
-            {editMode ? (
+            {!currentUser ? (
+              <>
+                <button className="btn btn-primary" onClick={() => setPage("login")}>
+                  Login
+                </button>
+                <button
+                  className="btn btn-outline"
+                  style={{ color: "#94a3b8", borderColor: "rgba(148,163,184,0.25)" }}
+                  onClick={() => setPage("signup")}
+                >
+                  Signup
+                </button>
+              </>
+            ) : editMode ? (
               <>
                 <button className="btn btn-primary" onClick={handleSave}>
                   Save Changes
                 </button>
-                <button className="btn btn-outline" style={{ color: "#94a3b8", borderColor: "rgba(148,163,184,0.25)" }} onClick={() => setEditMode(false)}>
+                <button
+                  className="btn btn-outline"
+                  style={{ color: "#94a3b8", borderColor: "rgba(148,163,184,0.25)" }}
+                  onClick={() => {
+                    setDraft({
+                      name: currentUser?.name || "",
+                      email: currentUser?.email || "",
+                    });
+                    setFieldErrors({});
+                    setEditMode(false);
+                  }}
+                >
                   Cancel
                 </button>
               </>

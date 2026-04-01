@@ -249,7 +249,7 @@ export default function Landing({ setPage }) {
                     }
                   : {}),
               }}
-              onClick={() => setPage?.("signup")}
+              onClick={() => setPage?.("login")}
               onMouseEnter={() => setHovered(true)}
               onMouseLeave={() => setHovered(false)}
             >

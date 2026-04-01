@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
 
@@ -185,6 +187,19 @@ const styles = `
     box-shadow: 0 0 0 3px rgba(255, 60, 60, 0.1);
   }
 
+  .field input.input-error {
+    border-color: rgba(248, 113, 113, 0.65);
+    background: rgba(248, 113, 113, 0.09);
+    box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.12);
+  }
+
+  .field-error {
+    margin-top: 7px;
+    font-size: 12px;
+    color: #fca5a5;
+    line-height: 1.35;
+  }
+
   /* Forgot row */
   .forgot-row {
     display: flex;
@@ -336,8 +351,135 @@ function ArrowLeft() {
   );
 }
 
-export default function Login({ setPage }) {
+export default function Login({
+  setPage,
+  onNotify,
+  onLogin,
+  onRequestPasswordReset,
+  onResetPassword,
+}) {
   const [view, setView] = useState("login"); // "login" | "forgot" | "reset"
+  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [resetForm, setResetForm] = useState({ password: "", confirmPassword: "" });
+  const [loginErrors, setLoginErrors] = useState({});
+  const [forgotError, setForgotError] = useState("");
+  const [resetErrors, setResetErrors] = useState({});
+
+  function handleViewChange(nextView) {
+    setView(nextView);
+    setLoginErrors({});
+    setForgotError("");
+    setResetErrors({});
+  }
+
+  function handleLoginSubmit() {
+    const nextErrors = {};
+
+    if (!loginForm.email.trim()) {
+      nextErrors.email = "Email is required.";
+    } else if (!EMAIL_REGEX.test(loginForm.email.trim())) {
+      nextErrors.email = "Please enter a valid email address.";
+    }
+
+    if (!loginForm.password.trim()) {
+      nextErrors.password = "Password is required.";
+    }
+
+    setLoginErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      onNotify?.("Please correct the highlighted login fields.", "error");
+      return;
+    }
+
+    const loginResult = onLogin?.({
+      email: loginForm.email.trim(),
+      password: loginForm.password,
+    });
+
+    if (!loginResult?.ok) {
+      const fieldName = loginResult?.field === "password" ? "password" : "email";
+      setLoginErrors((prev) => ({
+        ...prev,
+        [fieldName]: loginResult?.error || "Invalid credentials.",
+      }));
+      onNotify?.(loginResult?.error || "Invalid credentials.", "error");
+      return;
+    }
+
+    onNotify?.("Sign-in successful.", "success");
+    setPage("input");
+  }
+
+  function handleForgotSubmit() {
+    if (!forgotEmail.trim()) {
+      setForgotError("Email is required.");
+      onNotify?.("Please enter the email address associated with your account.", "error");
+      return;
+    }
+
+    if (!EMAIL_REGEX.test(forgotEmail.trim())) {
+      setForgotError("Please enter a valid email address.");
+      onNotify?.("Unable to send a reset request. Please enter a valid email address.", "error");
+      return;
+    }
+
+    const forgotResult = onRequestPasswordReset?.(forgotEmail.trim());
+    if (!forgotResult?.ok) {
+      setForgotError(forgotResult?.error || "No account found for this email.");
+      onNotify?.(forgotResult?.error || "No account found for this email.", "error");
+      return;
+    }
+
+    setForgotError("");
+    onNotify?.("Email verified. Please set a new password.", "info");
+    handleViewChange("reset");
+  }
+
+  function handleResetSubmit() {
+    const nextErrors = {};
+
+    if (!resetForm.password.trim()) {
+      nextErrors.password = "New password is required.";
+    } else if (resetForm.password.length < 8) {
+      nextErrors.password = "Password must be at least 8 characters.";
+    }
+
+    if (!resetForm.confirmPassword.trim()) {
+      nextErrors.confirmPassword = "Please confirm your new password.";
+    } else if (resetForm.password !== resetForm.confirmPassword) {
+      nextErrors.confirmPassword = "Passwords do not match.";
+    }
+
+    setResetErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      onNotify?.("Please correct the highlighted password reset fields.", "error");
+      return;
+    }
+
+    if (!forgotEmail.trim()) {
+      onNotify?.("Please begin the password reset process by entering your email.", "error");
+      handleViewChange("forgot");
+      return;
+    }
+
+    const resetResult = onResetPassword?.({
+      email: forgotEmail.trim(),
+      password: resetForm.password,
+    });
+    if (!resetResult?.ok) {
+      setResetErrors({ password: resetResult?.error || "Password reset failed." });
+      onNotify?.(resetResult?.error || "Password reset failed.", "error");
+      return;
+    }
+
+    onNotify?.("Password updated successfully. Please sign in.", "success");
+    setResetForm({ password: "", confirmPassword: "" });
+    setLoginForm((prev) => ({ ...prev, password: "" }));
+    handleViewChange("login");
+  }
 
   return (
     <>
@@ -353,7 +495,7 @@ export default function Login({ setPage }) {
             <div className="logo-text">OutbreakX</div>
           </div>
           <div className="back-link">
-            <button className="link-btn" onClick={() => setPage("signup")} type="button">
+            <button className="link-btn" onClick={() => setPage("landing")} type="button">
               <ArrowLeft /> Back
             </button>
           </div>
@@ -370,25 +512,47 @@ export default function Login({ setPage }) {
 
               <div className="field">
                 <label>Email Address</label>
-                <input type="email" placeholder="you@example.com" />
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={loginForm.email}
+                  className={loginErrors.email ? "input-error" : ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setLoginForm((prev) => ({ ...prev, email: value }));
+                    if (loginErrors.email) {
+                      setLoginErrors((prev) => ({ ...prev, email: "" }));
+                    }
+                  }}
+                />
+                {loginErrors.email && <p className="field-error">{loginErrors.email}</p>}
               </div>
 
               <div className="field">
                 <label>Password</label>
-                <input type="password" placeholder="••••••••" />
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={loginForm.password}
+                  className={loginErrors.password ? "input-error" : ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setLoginForm((prev) => ({ ...prev, password: value }));
+                    if (loginErrors.password) {
+                      setLoginErrors((prev) => ({ ...prev, password: "" }));
+                    }
+                  }}
+                />
+                {loginErrors.password && <p className="field-error">{loginErrors.password}</p>}
               </div>
 
               <div className="forgot-row">
-                <button className="link-btn" onClick={() => setView("forgot")}>
+                <button className="link-btn" onClick={() => handleViewChange("forgot")} type="button">
                   Forgot Password?
                 </button>
               </div>
 
-              <button className="btn-primary" type="button" onClick={() => {
-                // Handle login logic here
-                console.log("Login clicked");
-                setPage("input");
-              }}>
+              <button className="btn-primary" type="button" onClick={handleLoginSubmit}>
                 Log In
               </button>
 
@@ -423,15 +587,32 @@ export default function Login({ setPage }) {
 
               <div className="field">
                 <label>Email Address</label>
-                <input type="email" placeholder="you@example.com" />
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={forgotEmail}
+                  className={forgotError ? "input-error" : ""}
+                  onChange={(e) => {
+                    setForgotEmail(e.target.value);
+                    if (forgotError) {
+                      setForgotError("");
+                    }
+                  }}
+                />
+                {forgotError && <p className="field-error">{forgotError}</p>}
               </div>
 
-              <button className="btn-primary" style={{ marginTop: 8 }} onClick={() => setView("reset")}>
+              <button className="btn-primary" type="button" style={{ marginTop: 8 }} onClick={handleForgotSubmit}>
                 Send Reset Link
               </button>
 
               <div className="back-link">
-                <button className="link-btn" onClick={() => setView("login")} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <button
+                  className="link-btn"
+                  onClick={() => handleViewChange("login")}
+                  style={{ display: "flex", alignItems: "center", gap: 5 }}
+                  type="button"
+                >
                   <ArrowLeft /> Back to Login
                 </button>
               </div>
@@ -450,20 +631,51 @@ export default function Login({ setPage }) {
 
               <div className="field">
                 <label>New Password</label>
-                <input type="password" placeholder="••••••••" />
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={resetForm.password}
+                  className={resetErrors.password ? "input-error" : ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setResetForm((prev) => ({ ...prev, password: value }));
+                    if (resetErrors.password) {
+                      setResetErrors((prev) => ({ ...prev, password: "" }));
+                    }
+                  }}
+                />
+                {resetErrors.password && <p className="field-error">{resetErrors.password}</p>}
               </div>
 
               <div className="field">
                 <label>Confirm Password</label>
-                <input type="password" placeholder="••••••••" />
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={resetForm.confirmPassword}
+                  className={resetErrors.confirmPassword ? "input-error" : ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setResetForm((prev) => ({ ...prev, confirmPassword: value }));
+                    if (resetErrors.confirmPassword) {
+                      setResetErrors((prev) => ({ ...prev, confirmPassword: "" }));
+                    }
+                  }}
+                />
+                {resetErrors.confirmPassword && <p className="field-error">{resetErrors.confirmPassword}</p>}
               </div>
 
-              <button className="btn-primary" style={{ marginTop: 8 }}>
+              <button className="btn-primary" type="button" style={{ marginTop: 8 }} onClick={handleResetSubmit}>
                 Reset Password
               </button>
 
               <div className="back-link">
-                <button className="link-btn" onClick={() => setView("login")} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <button
+                  className="link-btn"
+                  onClick={() => handleViewChange("login")}
+                  style={{ display: "flex", alignItems: "center", gap: 5 }}
+                  type="button"
+                >
                   <ArrowLeft /> Back to Login
                 </button>
               </div>

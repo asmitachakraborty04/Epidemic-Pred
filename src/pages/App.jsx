@@ -1,9 +1,51 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 import Landing from "./Landing";
 import Dashboard from "./Dashboard";
 import Login from "./Login";
 import Signup from "./Signup";
 import Profile from "./Profile";
+
+const USERS_STORAGE_KEY = "outbreakx.users";
+const CURRENT_USER_STORAGE_KEY = "outbreakx.currentUserEmail";
+
+function normalizeEmail(email) {
+  return email.trim().toLowerCase();
+}
+
+function loadStoredUsers() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(USERS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Failed to parse stored users", error);
+    return [];
+  }
+}
+
+function loadStoredCurrentUserEmail() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return window.localStorage.getItem(CURRENT_USER_STORAGE_KEY) || "";
+}
+
+function formatDateTime(date = new Date()) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -187,6 +229,19 @@ const css = `
 
   .field input::placeholder { color: #2e3a52; }
 
+  .field input.input-error {
+    border-color: rgba(248,113,113,0.65);
+    background: rgba(248,113,113,0.08);
+    box-shadow: 0 0 0 3px rgba(248,113,113,0.12);
+  }
+
+  .field-error {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #fca5a5;
+    line-height: 1.35;
+  }
+
   .btn {
     width: 100%;
     padding: 15px;
@@ -221,6 +276,14 @@ const css = `
   }
 
   .btn:active { transform: translateY(0); }
+
+  .btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    filter: none;
+    transform: none;
+    box-shadow: 0 4px 14px rgba(99,102,241,0.2);
+  }
 
   .result-row {
     display: flex;
@@ -320,6 +383,94 @@ const css = `
     75%       { transform: translateX(6px); }
   }
   .shake { animation: shake 0.35s ease; }
+
+  .toast-stack {
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    z-index: 600;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: min(92vw, 380px);
+  }
+
+  .toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(12,16,27,0.95);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 12px 12px 12px 14px;
+    color: #e2e8f0;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+    animation: toast-in 0.25s ease;
+    backdrop-filter: blur(8px);
+  }
+
+  .toast-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .toast-message {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+
+  .toast-close {
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.08);
+    color: #cbd5e1;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+
+  .toast-close:hover {
+    background: rgba(255,255,255,0.16);
+  }
+
+  .toast-success {
+    border-color: rgba(74,222,128,0.35);
+  }
+  .toast-success .toast-dot {
+    background: #4ade80;
+    box-shadow: 0 0 10px rgba(74,222,128,0.55);
+  }
+
+  .toast-error {
+    border-color: rgba(248,113,113,0.35);
+  }
+  .toast-error .toast-dot {
+    background: #f87171;
+    box-shadow: 0 0 10px rgba(248,113,113,0.55);
+  }
+
+  .toast-info {
+    border-color: rgba(96,165,250,0.35);
+  }
+  .toast-info .toast-dot {
+    background: #60a5fa;
+    box-shadow: 0 0 10px rgba(96,165,250,0.55);
+  }
+
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
 `;
 
 function ProfileButton({ setPage }) {
@@ -334,6 +485,27 @@ function ProfileButton({ setPage }) {
   );
 }
 
+function ToastStack({ toasts, onDismiss }) {
+  return (
+    <div className="toast-stack" aria-live="polite" aria-atomic="false">
+      {toasts.map((toast) => (
+        <div key={toast.id} className={`toast toast-${toast.type}`} role="status">
+          <span className="toast-dot" />
+          <span className="toast-message">{toast.message}</span>
+          <button
+            className="toast-close"
+            type="button"
+            onClick={() => onDismiss(toast.id)}
+            aria-label="Dismiss notification"
+          >
+            x
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [region, setRegion] = useState("");
   const [page, setPage] = useState("landing");
@@ -343,16 +515,225 @@ export default function App() {
   const [backendConnected, setBackendConnected] = useState(null);
   const [responseRegions, setResponseRegions] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [regionError, setRegionError] = useState("");
+  const [toasts, setToasts] = useState([]);
+  const [users, setUsers] = useState(() => loadStoredUsers());
+  const [currentUserEmail, setCurrentUserEmail] = useState(() => loadStoredCurrentUserEmail());
+
+  const currentUser = users.find((user) => user.email === currentUserEmail) || null;
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (currentUserEmail) {
+      window.localStorage.setItem(CURRENT_USER_STORAGE_KEY, currentUserEmail);
+    } else {
+      window.localStorage.removeItem(CURRENT_USER_STORAGE_KEY);
+    }
+  }, [currentUserEmail]);
+
+  useEffect(() => {
+    if (!currentUserEmail) {
+      return;
+    }
+
+    const exists = users.some((user) => user.email === currentUserEmail);
+    if (!exists) {
+      setCurrentUserEmail("");
+    }
+  }, [users, currentUserEmail]);
+
+  function removeToast(toastId) {
+    setToasts((prev) => prev.filter((toast) => toast.id !== toastId));
+  }
+
+  function addToast(message, type = "info") {
+    const toastId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setToasts((prev) => [...prev, { id: toastId, message, type }]);
+    setTimeout(() => removeToast(toastId), 3200);
+  }
+
+  function signupUser({ name, email, password }) {
+    const normalizedEmail = normalizeEmail(email);
+
+    const existingUser = users.find((user) => user.email === normalizedEmail);
+    if (existingUser) {
+      return {
+        ok: false,
+        field: "email",
+        error: "An account already exists with this email.",
+      };
+    }
+
+    const nextUser = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name: name.trim(),
+      email: normalizedEmail,
+      password,
+      region: "Not selected",
+      lastPrediction: "No predictions yet",
+      accountStatus: "Active",
+      predictionsCount: 0,
+      lastLogin: formatDateTime(),
+    };
+
+    setUsers((prev) => [...prev, nextUser]);
+    setCurrentUserEmail(normalizedEmail);
+    return { ok: true };
+  }
+
+  function loginUser({ email, password }) {
+    const normalizedEmail = normalizeEmail(email);
+    const existingUser = users.find((user) => user.email === normalizedEmail);
+
+    if (!existingUser) {
+      return {
+        ok: false,
+        field: "email",
+        error: "No account found for this email. Please sign up first.",
+      };
+    }
+
+    if (existingUser.password !== password) {
+      return {
+        ok: false,
+        field: "password",
+        error: "Incorrect password.",
+      };
+    }
+
+    setCurrentUserEmail(normalizedEmail);
+    setUsers((prev) =>
+      prev.map((user) =>
+        user.email === normalizedEmail
+          ? {
+              ...user,
+              accountStatus: "Active",
+              lastLogin: formatDateTime(),
+            }
+          : user,
+      ),
+    );
+
+    return { ok: true };
+  }
+
+  function requestPasswordReset(email) {
+    const normalizedEmail = normalizeEmail(email);
+    const existingUser = users.find((user) => user.email === normalizedEmail);
+
+    if (!existingUser) {
+      return {
+        ok: false,
+        error: "No account found for this email.",
+      };
+    }
+
+    return { ok: true };
+  }
+
+  function resetPassword({ email, password }) {
+    const normalizedEmail = normalizeEmail(email);
+    let wasUpdated = false;
+
+    setUsers((prev) =>
+      prev.map((user) => {
+        if (user.email === normalizedEmail) {
+          wasUpdated = true;
+          return { ...user, password };
+        }
+
+        return user;
+      }),
+    );
+
+    if (!wasUpdated) {
+      return {
+        ok: false,
+        error: "Unable to reset password for this account.",
+      };
+    }
+
+    return { ok: true };
+  }
+
+  function updateCurrentUserProfile({ name, email }) {
+    if (!currentUserEmail) {
+      return { ok: false, error: "No active session found." };
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+    const duplicateUser = users.find(
+      (user) => user.email === normalizedEmail && user.email !== currentUserEmail,
+    );
+
+    if (duplicateUser) {
+      return {
+        ok: false,
+        field: "email",
+        error: "An account already exists with this email.",
+      };
+    }
+
+    setUsers((prev) =>
+      prev.map((user) => {
+        if (user.email !== currentUserEmail) {
+          return user;
+        }
+
+        return {
+          ...user,
+          name: name.trim(),
+          email: normalizedEmail,
+        };
+      }),
+    );
+    setCurrentUserEmail(normalizedEmail);
+
+    return { ok: true };
+  }
+
+  function logoutCurrentUser() {
+    if (currentUserEmail) {
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.email === currentUserEmail
+            ? {
+                ...user,
+                accountStatus: "Signed Out",
+              }
+            : user,
+        ),
+      );
+    }
+
+    setCurrentUserEmail("");
+    setPage("landing");
+    addToast("You have been signed out.", "info");
+  }
 
   async function handlePredict() {
     if (!region.trim()) {
+      setRegionError("Please enter a region to run prediction.");
       setShake(true);
       setTimeout(() => setShake(false), 400);
+      addToast("Region is required before running prediction.", "error");
       return;
     }
 
     setIsLoading(true);
     setShake(false);
+    setRegionError("");
     setBackendConnected(null);
 
     const requestPayload = { region: region.trim() };
@@ -361,21 +742,33 @@ export default function App() {
       const apiUrl = import.meta.env.VITE_API_URL
         ? `${import.meta.env.VITE_API_URL}/predict`
         : "/api/predict";
-      const response = await fetch(apiUrl, {
-        method: "POST",
+      const { data } = await axios.post(apiUrl, requestPayload, {
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestPayload),
       });
-
-      if (!response.ok) throw new Error(`backend status ${response.status}`);
-
-      const data = await response.json();
       if (!data || typeof data.risk !== "string") throw new Error("invalid backend payload");
 
       setBackendConnected(true);
       setRisk(data.risk);
-      setSubmittedRegion(data.region || requestPayload.region);
+      const resolvedRegion = data.region || requestPayload.region;
+      setSubmittedRegion(resolvedRegion);
       setResponseRegions(Array.isArray(data.regions) ? data.regions : null);
+
+      if (currentUserEmail) {
+        setUsers((prev) =>
+          prev.map((user) =>
+            user.email === currentUserEmail
+              ? {
+                  ...user,
+                  region: resolvedRegion,
+                  lastPrediction: data.risk,
+                  predictionsCount: (user.predictionsCount || 0) + 1,
+                }
+              : user,
+          ),
+        );
+      }
+
+      addToast(`Prediction ready for ${resolvedRegion}.`, "success");
       setPage("dashboard");
     } catch (error) {
       console.error("Backend prediction failed", error);
@@ -383,6 +776,23 @@ export default function App() {
       setRisk(null);
       setSubmittedRegion(requestPayload.region);
       setResponseRegions(null);
+
+      if (currentUserEmail) {
+        setUsers((prev) =>
+          prev.map((user) =>
+            user.email === currentUserEmail
+              ? {
+                  ...user,
+                  region: requestPayload.region,
+                  lastPrediction: "Unavailable",
+                  predictionsCount: (user.predictionsCount || 0) + 1,
+                }
+              : user,
+          ),
+        );
+      }
+
+      addToast("Backend unavailable. Showing fallback dashboard.", "error");
       setPage("dashboard");
     } finally {
       setIsLoading(false);
@@ -395,14 +805,34 @@ export default function App() {
     risk === "Low"    ? "badge badge-low"    :
                         "badge badge-none";
 
-  if (page === "landing") return <Landing setPage={setPage} />;
-  if (page === "signup")  return <Signup setPage={setPage} />;
-  if (page === "login")   return <Login setPage={setPage} />;
-  if (page === "profile") return <Profile setPage={setPage} />;
+  let pageContent;
 
-  return (
-    <>
-      <style>{css}</style>
+  if (page === "landing") {
+    pageContent = <Landing setPage={setPage} />;
+  } else if (page === "signup") {
+    pageContent = <Signup setPage={setPage} onNotify={addToast} onSignup={signupUser} />;
+  } else if (page === "login") {
+    pageContent = (
+      <Login
+        setPage={setPage}
+        onNotify={addToast}
+        onLogin={loginUser}
+        onRequestPasswordReset={requestPasswordReset}
+        onResetPassword={resetPassword}
+      />
+    );
+  } else if (page === "profile") {
+    pageContent = (
+      <Profile
+        setPage={setPage}
+        currentUser={currentUser}
+        onNotify={addToast}
+        onSaveProfile={updateCurrentUserProfile}
+        onLogout={logoutCurrentUser}
+      />
+    );
+  } else {
+    pageContent = (
       <div className="page">
         <ProfileButton setPage={setPage} />
 
@@ -428,16 +858,19 @@ export default function App() {
                     type="text"
                     placeholder="e.g. South Asia"
                     value={region}
+                    className={regionError ? "input-error" : ""}
                     onChange={(e) => {
                       setRegion(e.target.value);
                       setRisk(null);
                       setBackendConnected(null);
                       setSubmittedRegion("");
+                      setRegionError("");
                     }}
                     onKeyDown={(e) => e.key === "Enter" && handlePredict()}
                     disabled={isLoading}
                   />
                 </div>
+                {regionError && <p className="field-error">{regionError}</p>}
               </div>
             </div>
 
@@ -476,6 +909,14 @@ export default function App() {
           />
         )}
       </div>
+    );
+  }
+
+  return (
+    <>
+      <style>{css}</style>
+      <ToastStack toasts={toasts} onDismiss={removeToast} />
+      {pageContent}
     </>
   );
 }

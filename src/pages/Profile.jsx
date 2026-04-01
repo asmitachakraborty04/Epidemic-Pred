@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
@@ -415,17 +415,11 @@ function InfoCard({ icon, iconClass, label, value, isStatus }) {
 
 export default function Profile({ setPage, currentUser, onNotify, onSaveProfile, onLogout }) {
   const [editMode, setEditMode] = useState(false);
-  const [draft, setDraft] = useState({ name: "", email: "" });
+  const [draft, setDraft] = useState({
+    name: currentUser?.name || "",
+    email: currentUser?.email || "",
+  });
   const [fieldErrors, setFieldErrors] = useState({});
-
-  useEffect(() => {
-    setDraft({
-      name: currentUser?.name || "",
-      email: currentUser?.email || "",
-    });
-    setEditMode(false);
-    setFieldErrors({});
-  }, [currentUser?.name, currentUser?.email]);
 
   const displayName = currentUser?.name || "Guest User";
   const displayEmail = currentUser?.email || "No active account";
@@ -446,7 +440,7 @@ export default function Profile({ setPage, currentUser, onNotify, onSaveProfile,
     setEditMode(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     const nextErrors = {};
 
     if (!draft.name.trim()) {
@@ -466,7 +460,7 @@ export default function Profile({ setPage, currentUser, onNotify, onSaveProfile,
       return;
     }
 
-    const saveResult = onSaveProfile?.({
+    const saveResult = await onSaveProfile?.({
       name: draft.name.trim(),
       email: draft.email.trim(),
     });

@@ -373,7 +373,7 @@ export default function Login({
     setResetErrors({});
   }
 
-  function handleLoginSubmit() {
+  async function handleLoginSubmit() {
     const nextErrors = {};
 
     if (!loginForm.email.trim()) {
@@ -393,7 +393,7 @@ export default function Login({
       return;
     }
 
-    const loginResult = onLogin?.({
+    const loginResult = await onLogin?.({
       email: loginForm.email.trim(),
       password: loginForm.password,
     });
@@ -412,7 +412,7 @@ export default function Login({
     setPage("input");
   }
 
-  function handleForgotSubmit() {
+  async function handleForgotSubmit() {
     if (!forgotEmail.trim()) {
       setForgotError("Email is required.");
       onNotify?.("Please enter the email address associated with your account.", "error");
@@ -425,7 +425,7 @@ export default function Login({
       return;
     }
 
-    const forgotResult = onRequestPasswordReset?.(forgotEmail.trim());
+    const forgotResult = await onRequestPasswordReset?.(forgotEmail.trim());
     if (!forgotResult?.ok) {
       setForgotError(forgotResult?.error || "No account found for this email.");
       onNotify?.(forgotResult?.error || "No account found for this email.", "error");
@@ -437,7 +437,7 @@ export default function Login({
     handleViewChange("reset");
   }
 
-  function handleResetSubmit() {
+  async function handleResetSubmit() {
     const nextErrors = {};
 
     if (!resetForm.password.trim()) {
@@ -465,7 +465,7 @@ export default function Login({
       return;
     }
 
-    const resetResult = onResetPassword?.({
+    const resetResult = await onResetPassword?.({
       email: forgotEmail.trim(),
       password: resetForm.password,
     });

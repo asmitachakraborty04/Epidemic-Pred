@@ -8,6 +8,8 @@ import Profile from "./Profile";
 
 const USERS_STORAGE_KEY = "outbreakx.users";
 const CURRENT_USER_STORAGE_KEY = "outbreakx.currentUserEmail";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+const API_KEY = (import.meta.env.VITE_API_KEY || "").trim();
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -40,11 +42,92 @@ function loadStoredCurrentUserEmail() {
   return window.localStorage.getItem(CURRENT_USER_STORAGE_KEY) || "";
 }
 
-function formatDateTime(date = new Date()) {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+function buildApiUrl(path) {
+  return `${API_BASE_URL}${path}`;
+}
+
+function withApiAuth(config = {}) {
+  if (!API_KEY) {
+    return config;
+  }
+
+  return {
+    ...config,
+    headers: {
+      ...(config.headers || {}),
+      "X-API-Key": API_KEY,
+    },
+  };
+}
+
+function humanizeFieldName(field) {
+  if (!field || typeof field !== "string") {
+    return "Field";
+  }
+
+  const normalized = field.replace(/_/g, " ").trim();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function readValidationDetailMessage(details) {
+  if (!Array.isArray(details) || details.length === 0) {
+    return "";
+  }
+
+  const first = details[0] || {};
+  const field = Array.isArray(first.loc) ? first.loc[first.loc.length - 1] : "";
+  const fieldLabel = humanizeFieldName(field);
+  const rawMsg = typeof first.msg === "string" ? first.msg.trim() : "";
+
+  if (!rawMsg) {
+    return "";
+  }
+
+  if (/field required/i.test(rawMsg)) {
+    return `${fieldLabel} is required.`;
+  }
+
+  if (/at least\s+8\s+characters/i.test(rawMsg) && String(field).toLowerCase().includes("password")) {
+    return "Password must be at least 8 characters.";
+  }
+
+  if (/at least\s+2\s+characters/i.test(rawMsg) && String(field).toLowerCase().includes("name")) {
+    return "Name must be at least 2 characters.";
+  }
+
+  return `${fieldLabel}: ${rawMsg}`;
+}
+
+function readApiErrorMessage(error, fallbackMessage) {
+  const detail = error?.response?.data?.detail;
+  const errorPayload = error?.response?.data?.error;
+  const validationMessage = readValidationDetailMessage(errorPayload?.details);
+
+  if (validationMessage) {
+    return validationMessage;
+  }
+
+  const detailMessage =
+    typeof detail === "string"
+      ? detail
+      : detail?.error?.message || detail?.message;
+
+  const apiMessage = errorPayload?.message;
+
+  if (/invalid request payload/i.test(String(apiMessage || ""))) {
+    return fallbackMessage || "Please check the entered details and try again.";
+  }
+
+  return (
+    apiMessage ||
+    detailMessage ||
+    fallbackMessage
+  );
+}
+
+function upsertUser(prevUsers, nextUser) {
+  const withoutUser = prevUsers.filter((user) => user.email !== nextUser.email);
+  return [...withoutUser, nextUser];
 }
 
 const css = `
@@ -547,11 +630,32 @@ export default function App() {
       return;
     }
 
-    const exists = users.some((user) => user.email === currentUserEmail);
-    if (!exists) {
-      setCurrentUserEmail("");
+    let isCancelled = false;
+
+    async function syncCurrentUserFromApi() {
+      try {
+        const { data } = await axios.get(buildApiUrl("/users/profile"), withApiAuth({
+          params: { email: currentUserEmail },
+        }));
+
+        if (isCancelled) {
+          return;
+        }
+
+        setUsers((prev) => upsertUser(prev, data));
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Failed to sync user profile", error);
+        }
+      }
     }
-  }, [users, currentUserEmail]);
+
+    syncCurrentUserFromApi();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUserEmail]);
 
   function removeToast(toastId) {
     setToasts((prev) => prev.filter((toast) => toast.id !== toastId));
@@ -563,144 +667,129 @@ export default function App() {
     setTimeout(() => removeToast(toastId), 3200);
   }
 
-  function signupUser({ name, email, password }) {
+  async function signupUser({ name, email, password }) {
     const normalizedEmail = normalizeEmail(email);
 
-    const existingUser = users.find((user) => user.email === normalizedEmail);
-    if (existingUser) {
+    try {
+      const { data } = await axios.post(buildApiUrl("/users/signup"), {
+        name: name.trim(),
+        email: normalizedEmail,
+        password,
+      }, withApiAuth());
+
+      setUsers((prev) => upsertUser(prev, data));
+      setCurrentUserEmail(data.email);
+      return { ok: true };
+    } catch (error) {
       return {
         ok: false,
         field: "email",
-        error: "An account already exists with this email.",
+        error: readApiErrorMessage(error, "Unable to create account."),
       };
     }
-
-    const nextUser = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      name: name.trim(),
-      email: normalizedEmail,
-      password,
-      region: "Not selected",
-      lastPrediction: "No predictions yet",
-      accountStatus: "Active",
-      predictionsCount: 0,
-      lastLogin: formatDateTime(),
-    };
-
-    setUsers((prev) => [...prev, nextUser]);
-    setCurrentUserEmail(normalizedEmail);
-    return { ok: true };
   }
 
-  function loginUser({ email, password }) {
+  async function loginUser({ email, password }) {
     const normalizedEmail = normalizeEmail(email);
-    const existingUser = users.find((user) => user.email === normalizedEmail);
 
-    if (!existingUser) {
+    try {
+      const { data } = await axios.post(buildApiUrl("/users/login"), {
+        email: normalizedEmail,
+        password,
+      }, withApiAuth());
+
+      setCurrentUserEmail(data.email);
+      setUsers((prev) => upsertUser(prev, data));
+      return { ok: true };
+    } catch (error) {
+      const statusCode = error?.response?.status;
+      const detailField = error?.response?.data?.error?.details?.[0]?.loc?.slice(-1)?.[0];
+      const fieldFromValidation = detailField === "password" ? "password" : detailField === "email" ? "email" : null;
       return {
         ok: false,
-        field: "email",
-        error: "No account found for this email. Please sign up first.",
+        field: statusCode === 401 ? "password" : fieldFromValidation || "email",
+        error: readApiErrorMessage(error, "Please check your email and password and try again."),
       };
     }
-
-    if (existingUser.password !== password) {
-      return {
-        ok: false,
-        field: "password",
-        error: "Incorrect password.",
-      };
-    }
-
-    setCurrentUserEmail(normalizedEmail);
-    setUsers((prev) =>
-      prev.map((user) =>
-        user.email === normalizedEmail
-          ? {
-              ...user,
-              accountStatus: "Active",
-              lastLogin: formatDateTime(),
-            }
-          : user,
-      ),
-    );
-
-    return { ok: true };
   }
 
-  function requestPasswordReset(email) {
+  async function requestPasswordReset(email) {
     const normalizedEmail = normalizeEmail(email);
-    const existingUser = users.find((user) => user.email === normalizedEmail);
 
-    if (!existingUser) {
+    try {
+      const { data } = await axios.post(buildApiUrl("/users/password/request"), {
+        email: normalizedEmail,
+      }, withApiAuth());
+      return data;
+    } catch (error) {
       return {
         ok: false,
-        error: "No account found for this email.",
+        error: readApiErrorMessage(error, "No account found for this email."),
       };
     }
-
-    return { ok: true };
   }
 
-  function resetPassword({ email, password }) {
+  async function resetPassword({ email, password }) {
     const normalizedEmail = normalizeEmail(email);
-    let wasUpdated = false;
 
-    setUsers((prev) =>
-      prev.map((user) => {
-        if (user.email === normalizedEmail) {
-          wasUpdated = true;
-          return { ...user, password };
-        }
-
-        return user;
-      }),
-    );
-
-    if (!wasUpdated) {
+    try {
+      const { data } = await axios.post(buildApiUrl("/users/password/reset"), {
+        email: normalizedEmail,
+        password,
+      }, withApiAuth());
+      return data;
+    } catch (error) {
       return {
         ok: false,
-        error: "Unable to reset password for this account.",
+        error: readApiErrorMessage(error, "Unable to reset password for this account."),
       };
     }
-
-    return { ok: true };
   }
 
-  function updateCurrentUserProfile({ name, email }) {
+  async function updateCurrentUserProfile({ name, email }) {
     if (!currentUserEmail) {
       return { ok: false, error: "No active session found." };
     }
 
+    const activeEmail = currentUserEmail;
     const normalizedEmail = normalizeEmail(email);
-    const duplicateUser = users.find(
-      (user) => user.email === normalizedEmail && user.email !== currentUserEmail,
-    );
 
-    if (duplicateUser) {
+    try {
+      const { data } = await axios.put(buildApiUrl("/users/profile"), {
+        current_email: activeEmail,
+        name: name.trim(),
+        email: normalizedEmail,
+      }, withApiAuth());
+
+      setUsers((prev) => {
+        const filteredUsers = prev.filter(
+          (user) => user.email !== activeEmail && user.email !== data.email,
+        );
+        return [...filteredUsers, data];
+      });
+      setCurrentUserEmail(data.email);
+      return { ok: true };
+    } catch (error) {
       return {
         ok: false,
         field: "email",
-        error: "An account already exists with this email.",
+        error: readApiErrorMessage(error, "Unable to save profile changes."),
       };
     }
+  }
 
-    setUsers((prev) =>
-      prev.map((user) => {
-        if (user.email !== currentUserEmail) {
-          return user;
-        }
+  async function syncPredictionToUser(email, regionValue, riskValue) {
+    try {
+      const { data } = await axios.post(buildApiUrl("/users/prediction"), {
+        email,
+        region: regionValue,
+        risk: riskValue,
+      }, withApiAuth());
 
-        return {
-          ...user,
-          name: name.trim(),
-          email: normalizedEmail,
-        };
-      }),
-    );
-    setCurrentUserEmail(normalizedEmail);
-
-    return { ok: true };
+      setUsers((prev) => upsertUser(prev, data));
+    } catch (error) {
+      console.error("Failed to sync prediction to user profile", error);
+    }
   }
 
   function logoutCurrentUser() {
@@ -739,12 +828,10 @@ export default function App() {
     const requestPayload = { region: region.trim() };
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL
-        ? `${import.meta.env.VITE_API_URL}/predict`
-        : "/api/predict";
-      const { data } = await axios.post(apiUrl, requestPayload, {
+      const apiUrl = buildApiUrl("/predict");
+      const { data } = await axios.post(apiUrl, requestPayload, withApiAuth({
         headers: { "Content-Type": "application/json" },
-      });
+      }));
       if (!data || typeof data.risk !== "string") throw new Error("invalid backend payload");
 
       setBackendConnected(true);
@@ -766,6 +853,8 @@ export default function App() {
               : user,
           ),
         );
+
+        await syncPredictionToUser(currentUserEmail, resolvedRegion, data.risk);
       }
 
       addToast(`Prediction ready for ${resolvedRegion}.`, "success");
@@ -790,6 +879,8 @@ export default function App() {
               : user,
           ),
         );
+
+        await syncPredictionToUser(currentUserEmail, requestPayload.region, "Unavailable");
       }
 
       addToast("Backend unavailable. Showing fallback dashboard.", "error");

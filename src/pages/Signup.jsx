@@ -171,7 +171,7 @@ export default function Signup({ setPage, onNotify, onSignup }) {
     }
   }
 
-  function handleSignup() {
+  async function handleSignup() {
     const nextErrors = {};
 
     if (!form.name.trim()) {
@@ -207,7 +207,7 @@ export default function Signup({ setPage, onNotify, onSignup }) {
       return;
     }
 
-    const signupResult = onSignup?.({
+    const signupResult = await onSignup?.({
       name: form.name,
       email: form.email,
       password: form.password,

@@ -454,7 +454,7 @@ export default function Profile({ setPage }) {
           <div className="page-title-row">
             <div className="page-title-badge">
               <span className="pulse-dot" />
-              Epidemic Spread Prediction
+              OutbreakX
             </div>
           </div>
           <h1 className="page-title" style={{ marginBottom: 28 }}>User Profile</h1>

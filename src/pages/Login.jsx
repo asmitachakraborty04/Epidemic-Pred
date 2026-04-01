@@ -350,7 +350,7 @@ export default function Login({ setPage }) {
           {/* Logo */}
           <div className="logo-mark">
             <div className="logo-icon"><VirusIcon /></div>
-            <div className="logo-text">Epidemic Spread<br />Prediction</div>
+            <div className="logo-text">OutbreakX</div>
           </div>
           <div className="back-link">
             <button className="link-btn" onClick={() => setPage("signup")} type="button">

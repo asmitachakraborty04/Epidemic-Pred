@@ -413,7 +413,7 @@ export default function App() {
                 <span className="tag-dot" />
                 AI · Epidemiology
               </div>
-              <h1 className="title">Epidemic Spread<br /><span>Prediction</span></h1>
+              <h1 className="title">OutbreakX</h1>
               <p className="subtitle">Enter a region to assess outbreak risk</p>
             </div>
 

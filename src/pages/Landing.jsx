@@ -207,8 +207,7 @@ export default function Landing({ setPage }) {
 
           {/* Title */}
           <h1 style={styles.title} className="title-anim">
-            Epidemic Spread<br />
-            <span style={styles.titleAccent}>Prediction</span>
+            OutbreakX
           </h1>
 
           {/* Divider */}

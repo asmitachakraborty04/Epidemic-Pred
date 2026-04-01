@@ -144,7 +144,7 @@ export default function Signup({ setPage }) {
         {/* Badge */}
         <div style={styles.badge}>
           <span style={styles.dot} />
-          Epidemic Spread Prediction
+          OutbreakX
         </div>
 
         {/* Heading */}

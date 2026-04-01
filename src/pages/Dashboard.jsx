@@ -646,7 +646,7 @@ export default function Dashboard({ region, risk, backendConnected = null, regio
               AI · Epidemiology
             </div>
             <h1 className="db-title">
-              Epidemic Dashboard<br />
+              OutbreakX Dashboard<br />
               <span>{displayTitle}</span>
             </h1>
             <p className="db-subtitle">

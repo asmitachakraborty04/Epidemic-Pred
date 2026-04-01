@@ -27,10 +27,6 @@ const REGION_OPTIONS = [
   "Caribbean",
   "Oceania",
 ];
-const PREDICTION_TYPE_OPTIONS = [
-  { value: "nextdaycases", label: "Next Day Cases" },
-  { value: "risks", label: "Risk Level" },
-];
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -858,8 +854,6 @@ function ToastStack({ toasts, onDismiss }) {
 
 export default function App() {
   const [region, setRegion] = useState("");
-  const [predictionTarget, setPredictionTarget] = useState("risks");
-  const [lastCompletedPredictionTarget, setLastCompletedPredictionTarget] = useState(null);
   const [page, setPage] = useState("landing");
   const [risk, setRisk] = useState(null);
   const [predictedCases, setPredictedCases] = useState(null);
@@ -875,9 +869,7 @@ export default function App() {
   const [users, setUsers] = useState(() => loadStoredUsers());
   const [currentUserEmail, setCurrentUserEmail] = useState(() => loadStoredCurrentUserEmail());
   const [isRegionOpen, setIsRegionOpen] = useState(false);
-  const [isPredictionTypeOpen, setIsPredictionTypeOpen] = useState(false);
   const regionDropdownRef = useRef(null);
-  const predictionDropdownRef = useRef(null);
 
   const currentUser = users.find((user) => user.email === currentUserEmail) || null;
 
@@ -937,9 +929,6 @@ export default function App() {
     function handleOutsideClick(event) {
       if (regionDropdownRef.current && !regionDropdownRef.current.contains(event.target)) {
         setIsRegionOpen(false);
-      }
-      if (predictionDropdownRef.current && !predictionDropdownRef.current.contains(event.target)) {
-        setIsPredictionTypeOpen(false);
       }
     }
 
@@ -1139,7 +1128,6 @@ export default function App() {
       const resolvedRegion = data.region || requestPayload.region;
       setSubmittedRegion(resolvedRegion);
       setResponseRegions(Array.isArray(data.regions) ? data.regions : null);
-      setLastCompletedPredictionTarget(predictionTarget);
 
       if (currentUserEmail) {
         setUsers((prev) =>
@@ -1168,7 +1156,6 @@ export default function App() {
       setHotspotLevel(null);
       setSubmittedRegion(requestPayload.region);
       setResponseRegions(null);
-      setLastCompletedPredictionTarget(null);
 
       if (currentUserEmail) {
         setUsers((prev) =>
@@ -1193,28 +1180,20 @@ export default function App() {
     }
   }
 
-  const isRiskMode = predictionTarget === "risks";
   const riskBadgeClass =
     risk === "High"   ? "badge badge-high"   :
     risk === "Medium" ? "badge badge-medium" :
     risk === "Low"    ? "badge badge-low"    :
                         "badge badge-none";
-  const badgeClass = isRiskMode ? riskBadgeClass : "badge badge-case";
+  const badgeClass = riskBadgeClass;
   const hotspotMeta = getHotspotMeta(hotspotLevel);
-  const hasCurrentModeResult =
+  const hasPredictionResult =
     backendConnected === true &&
-    !!submittedRegion &&
-    lastCompletedPredictionTarget === predictionTarget;
-  const predictionTypeLabel =
-    PREDICTION_TYPE_OPTIONS.find((option) => option.value === predictionTarget)?.label || "Risk Level";
-  const selectedMetricLabel = predictionTarget === "nextdaycases" ? "Next Day Cases" : "Risk Level";
-  const runAssessmentLabel = isRiskMode ? "Assess Outbreak Risk" : "Forecast Next-Day Cases";
-  const trendHelperText = isRiskMode
-    ? "Start the assessment to view detailed regional risk trends"
-    : "Start the forecast to view detailed next-day case trends";
-  const selectedMetricValue = predictionTarget === "nextdaycases"
-    ? (hasCurrentModeResult && typeof predictedCases === "number" ? Math.round(predictedCases).toLocaleString() : "—")
-    : (hasCurrentModeResult && risk ? risk : "—");
+    !!submittedRegion;
+  const selectedMetricLabel = "Risk Level";
+  const selectedMetricValue = hasPredictionResult && risk ? risk : "—";
+  const runAssessmentLabel = "Generate Full Outbreak Report";
+  const trendHelperText = "Run prediction to view combined risk, cases, and hotspot trends";
 
   let pageContent;
 
@@ -1274,7 +1253,6 @@ export default function App() {
                     onClick={() => {
                       if (isLoading) return;
                       setIsRegionOpen((prev) => !prev);
-                      setIsPredictionTypeOpen(false);
                     }}
                     disabled={isLoading}
                   >
@@ -1297,7 +1275,6 @@ export default function App() {
                             setRiskScore(null);
                             setHotspotLevel(null);
                             setBackendConnected(null);
-                            setLastCompletedPredictionTarget(null);
                             setSubmittedRegion("");
                             setResponseRegions(null);
                             setRegionError("");
@@ -1312,58 +1289,6 @@ export default function App() {
                 </div>
                 {regionError && <p className="field-error">{regionError}</p>}
               </div>
-
-              <div className="field">
-                <label>Prediction Type</label>
-                <div
-                  className={`dropdown ${isPredictionTypeOpen ? "is-open" : ""}`}
-                  ref={predictionDropdownRef}
-                >
-                  <span className="input-icon">🎯</span>
-                  <button
-                    type="button"
-                    className="dropdown-trigger"
-                    onClick={() => {
-                      if (isLoading) return;
-                      setIsPredictionTypeOpen((prev) => !prev);
-                      setIsRegionOpen(false);
-                    }}
-                    disabled={isLoading}
-                  >
-                    <span className="dropdown-value">{predictionTypeLabel}</span>
-                  </button>
-                  <span className="dropdown-caret">{isPredictionTypeOpen ? "▲" : "▼"}</span>
-                  {isPredictionTypeOpen && (
-                    <div className="dropdown-menu">
-                      {PREDICTION_TYPE_OPTIONS.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`dropdown-option ${option.value === predictionTarget ? "active" : ""}`}
-                          onClick={() => {
-                            if (option.value === predictionTarget) {
-                              setIsPredictionTypeOpen(false);
-                              return;
-                            }
-                            setPredictionTarget(option.value);
-                            setRisk(null);
-                            setPredictedCases(null);
-                            setRiskScore(null);
-                            setHotspotLevel(null);
-                            setBackendConnected(null);
-                            setLastCompletedPredictionTarget(null);
-                            setSubmittedRegion("");
-                            setResponseRegions(null);
-                            setIsPredictionTypeOpen(false);
-                          }}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
 
             <button className="btn" onClick={handlePredict} disabled={isLoading}>
@@ -1373,7 +1298,7 @@ export default function App() {
             <div className="result-row">
               <div className="result-left">
                 <span className="result-label">{selectedMetricLabel}</span>
-                {hasCurrentModeResult ? (
+                {hasPredictionResult ? (
                   <span className="result-region">{submittedRegion}</span>
                 ) : (
                   <span className="result-region">—</span>
@@ -1388,30 +1313,27 @@ export default function App() {
             <div className="metric-grid">
               <div className="metric-card">
                 <div className="metric-label">Hotspot Detection</div>
-                <div className="metric-value" style={{ color: hotspotMeta.color }}>{hasCurrentModeResult ? hotspotMeta.label : "—"}</div>
+                <div className="metric-value" style={{ color: hotspotMeta.color }}>{hasPredictionResult ? hotspotMeta.label : "—"}</div>
               </div>
-              {isRiskMode ? (
-                <div className="metric-card">
-                  <div className="metric-label">Risk Score</div>
-                  <div className="metric-value">
-                    {hasCurrentModeResult && typeof riskScore === "number" ? `${Math.round(riskScore)}%` : "—"}
-                  </div>
+              <div className="metric-card">
+                <div className="metric-label">Risk Score</div>
+                <div className="metric-value">
+                  {hasPredictionResult && typeof riskScore === "number" ? `${Math.round(riskScore)}%` : "—"}
                 </div>
-              ) : (
-                <div className="metric-card">
-                  <div className="metric-label">Projected Cases</div>
-                  <div className="metric-value">
-                    {hasCurrentModeResult && typeof predictedCases === "number" ? Math.round(predictedCases).toLocaleString() : "—"}
-                  </div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-label">Projected Cases</div>
+                <div className="metric-value">
+                  {hasPredictionResult && typeof predictedCases === "number" ? Math.round(predictedCases).toLocaleString() : "—"}
                 </div>
-              )}
+              </div>
             </div>
 
             <div className="chart-box">
               <span className="chart-text">{trendHelperText}</span>
             </div>
 
-            {hasCurrentModeResult && (
+            {hasPredictionResult && (
               <button className="btn btn-secondary" onClick={() => setPage("dashboard")} type="button">
                 Open Detailed Dashboard
               </button>
@@ -1423,7 +1345,6 @@ export default function App() {
           <Dashboard
             region={submittedRegion}
             risk={risk}
-            predictionTarget={predictionTarget}
             predictedCases={predictedCases}
             hotspotLevel={hotspotLevel}
             backendConnected={backendConnected}

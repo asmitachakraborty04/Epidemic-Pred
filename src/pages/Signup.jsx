@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -143,6 +143,9 @@ const styles = {
 export default function Signup({ setPage, onNotify, onSignup }) {
   const [hover, setHover] = useState(false);
   const [focused, setFocused] = useState(null);
+  const [isCompact, setIsCompact] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 640 : false,
+  );
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -150,6 +153,16 @@ export default function Signup({ setPage, onNotify, onSignup }) {
     confirmPassword: "",
   });
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const onResize = () => setIsCompact(window.innerWidth < 640);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const focusStyle = (name) =>
     focused === name
@@ -228,7 +241,13 @@ export default function Signup({ setPage, onNotify, onSignup }) {
   }
 
   return (
-    <div style={styles.page}>
+    <div
+      style={{
+        ...styles.page,
+        alignItems: isCompact ? "flex-start" : styles.page.alignItems,
+        padding: isCompact ? "14px 10px 18px" : styles.page.padding,
+      }}
+    >
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
@@ -236,7 +255,14 @@ export default function Signup({ setPage, onNotify, onSignup }) {
         }
       `}</style>
 
-      <div style={styles.card}>
+      <div
+        style={{
+          ...styles.card,
+          borderRadius: isCompact ? "16px" : styles.card.borderRadius,
+          padding: isCompact ? "24px 16px" : styles.card.padding,
+          maxWidth: isCompact ? "100%" : styles.card.maxWidth,
+        }}
+      >
         {/* Badge */}
         <div style={styles.badge}>
           <span style={styles.dot} />
@@ -244,8 +270,10 @@ export default function Signup({ setPage, onNotify, onSignup }) {
         </div>
 
         {/* Heading */}
-        <h1 style={styles.title}>Create Account</h1>
-        <p style={styles.subtitle}>Join to access AI-powered outbreak analytics</p>
+        <h1 style={{ ...styles.title, fontSize: isCompact ? "23px" : styles.title.fontSize }}>Create Account</h1>
+        <p style={{ ...styles.subtitle, margin: isCompact ? "0 0 24px 0" : styles.subtitle.margin }}>
+          Join to access AI-powered outbreak analytics
+        </p>
 
         {/* Back to Landing */}
         <div style={{ marginBottom: 12, textAlign: 'center' }}>
@@ -350,6 +378,7 @@ export default function Signup({ setPage, onNotify, onSignup }) {
         <button
           style={{
             ...styles.button,
+            minHeight: isCompact ? "44px" : undefined,
             opacity: hover ? 0.88 : 1,
             transform: hover ? "translateY(-1px)" : "translateY(0)",
             boxShadow: hover
@@ -365,7 +394,7 @@ export default function Signup({ setPage, onNotify, onSignup }) {
         </button>
 
         {/* Footer */}
-        <p style={styles.footer}>
+        <p style={{ ...styles.footer, fontSize: isCompact ? "12.5px" : styles.footer.fontSize }}>
           Already have an account?
           <button
             style={{ ...styles.link, border: 'none', background: 'none', padding: 0 }}

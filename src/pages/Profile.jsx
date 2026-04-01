@@ -395,6 +395,80 @@ const css = `
     border-top: 1px solid rgba(255,255,255,0.05);
     margin: 20px 0;
   }
+
+  @media (max-width: 900px) {
+    .profile-page {
+      padding: 74px 12px 28px;
+    }
+
+    .hero-card {
+      padding: 24px 18px 20px;
+      gap: 16px;
+    }
+
+    .stats-row {
+      grid-template-columns: 1fr;
+    }
+
+    .stat-card {
+      padding: 18px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .page-title {
+      font-size: 22px;
+    }
+
+    .page-title-row {
+      margin-bottom: 18px;
+    }
+
+    .hero-name {
+      font-size: 18px;
+    }
+
+    .hero-email {
+      font-size: 12px;
+      word-break: break-word;
+    }
+
+    .avatar {
+      width: 72px;
+      height: 72px;
+      font-size: 24px;
+    }
+
+    .btn-row {
+      flex-direction: column;
+    }
+
+    .btn {
+      min-width: 100%;
+    }
+
+    .stat-number {
+      font-size: 28px;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .profile-page {
+      padding: 68px 10px 20px;
+    }
+
+    .hero-card,
+    .info-card,
+    .stat-card {
+      border-radius: 14px;
+    }
+
+    .btn {
+      padding: 13px 14px;
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+  }
 `;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

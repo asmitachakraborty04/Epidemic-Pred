@@ -10,6 +10,7 @@ const styles = {
     fontFamily: "'Georgia', 'Times New Roman', serif",
     overflow: "hidden",
     position: "relative",
+    padding: "18px 12px 22px",
   },
   grid: {
     position: "absolute",
@@ -47,9 +48,9 @@ const styles = {
     background: "rgba(10, 20, 35, 0.85)",
     border: "1px solid rgba(0, 200, 140, 0.18)",
     borderRadius: 24,
-    padding: "64px 56px 56px",
+    padding: "clamp(28px, 6vw, 64px) clamp(18px, 6vw, 56px) clamp(24px, 5vw, 56px)",
     maxWidth: 600,
-    width: "90%",
+    width: "min(94vw, 600px)",
     textAlign: "center",
     boxShadow:
       "0 0 60px rgba(0,200,130,0.07), 0 30px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)",
@@ -93,7 +94,7 @@ const styles = {
     backgroundClip: "text",
   },
   subtitle: {
-    fontSize: 17,
+    fontSize: "clamp(13px, 2.4vw, 17px)",
     color: "#7a9ab0",
     lineHeight: 1.7,
     marginBottom: 48,
@@ -112,7 +113,9 @@ const styles = {
   statsRow: {
     display: "flex",
     justifyContent: "center",
-    gap: 32,
+    gap: 20,
+    rowGap: 12,
+    flexWrap: "wrap",
     marginBottom: 48,
   },
   stat: {
@@ -120,6 +123,7 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     gap: 4,
+    minWidth: 88,
   },
   statNum: {
     fontSize: 22,
@@ -143,12 +147,14 @@ const styles = {
   button: {
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 10,
     background: "linear-gradient(135deg, #00c885 0%, #00a0e0 100%)",
     color: "#020e18",
     border: "none",
     borderRadius: 12,
     padding: "16px 40px",
+    width: "min(100%, 280px)",
     fontSize: 16,
     fontWeight: 700,
     cursor: "pointer",
@@ -185,6 +191,35 @@ const keyframes = `
   .sub-anim   { animation: fadeUp 0.6s 0.35s cubic-bezier(.22,1,.36,1) both; }
   .stats-anim { animation: fadeUp 0.6s 0.45s cubic-bezier(.22,1,.36,1) both; }
   .btn-anim   { animation: fadeUp 0.6s 0.55s cubic-bezier(.22,1,.36,1) both; }
+
+  @media (max-width: 640px) {
+    .landing-card {
+      border-radius: 18px;
+    }
+
+    .landing-sub {
+      margin-bottom: 26px !important;
+      line-height: 1.55;
+    }
+
+    .landing-stats {
+      margin-bottom: 28px !important;
+    }
+
+    .landing-btn {
+      width: 100%;
+    }
+
+    .landing-footer {
+      margin-top: 24px !important;
+      font-size: 10px !important;
+      letter-spacing: 0.04em !important;
+    }
+
+    .stat-dot-sep {
+      display: none;
+    }
+  }
 `;
 
 export default function Landing({ setPage }) {
@@ -198,7 +233,7 @@ export default function Landing({ setPage }) {
         <div style={styles.glow1} />
         <div style={styles.glow2} />
 
-        <div style={styles.card} className="card-anim">
+        <div style={styles.card} className="card-anim landing-card">
           {/* Badge */}
           <div style={styles.badge} className="badge-anim">
             <div style={styles.pulse} />
@@ -214,22 +249,22 @@ export default function Landing({ setPage }) {
           <div style={styles.divider} />
 
           {/* Subtitle */}
-          <p style={styles.subtitle} className="sub-anim">
+          <p style={styles.subtitle} className="sub-anim landing-sub">
             AI-powered system to analyze and predict epidemic spread risk
           </p>
 
           {/* Stats */}
-          <div style={styles.statsRow} className="stats-anim">
+          <div style={styles.statsRow} className="stats-anim landing-stats">
             <div style={styles.stat}>
               <span style={styles.statNum}>98.2%</span>
               <span style={styles.statLabel}>Accuracy</span>
             </div>
-            <div style={{ ...styles.statDot }} />
+            <div className="stat-dot-sep" style={{ ...styles.statDot }} />
             <div style={styles.stat}>
               <span style={styles.statNum}>72h</span>
               <span style={styles.statLabel}>Forecast</span>
             </div>
-            <div style={{ ...styles.statDot }} />
+            <div className="stat-dot-sep" style={{ ...styles.statDot }} />
             <div style={styles.stat}>
               <span style={styles.statNum}>180+</span>
               <span style={styles.statLabel}>Regions</span>
@@ -252,6 +287,7 @@ export default function Landing({ setPage }) {
               onClick={() => setPage?.("login")}
               onMouseEnter={() => setHovered(true)}
               onMouseLeave={() => setHovered(false)}
+              className="landing-btn"
             >
               Start Analysis
               <span
@@ -266,7 +302,7 @@ export default function Landing({ setPage }) {
             </button>
           </div>
 
-          <p style={styles.footer}>v2.4.1 · MODEL: ESP-TRANSFORMER · STATUS: ONLINE</p>
+          <p style={styles.footer} className="landing-footer">v2.4.1 · MODEL: ESP-TRANSFORMER · STATUS: ONLINE</p>
         </div>
       </div>
     </>

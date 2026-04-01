@@ -554,6 +554,89 @@ const css = `
     from { opacity: 0; transform: translateY(-6px) scale(0.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
+
+  @media (max-width: 768px) {
+    .page {
+      align-items: flex-start;
+      padding: 78px 12px 24px;
+    }
+
+    .profile-btn {
+      top: 12px;
+      left: 12px;
+      width: 40px;
+      height: 40px;
+      font-size: 18px;
+    }
+
+    .card {
+      border-radius: 18px;
+      padding: 24px 16px;
+      max-width: 100%;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .title {
+      font-size: 22px;
+      letter-spacing: -0.3px;
+    }
+
+    .subtitle {
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .result-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .result-region {
+      max-width: 100%;
+      white-space: normal;
+    }
+
+    .badge {
+      padding: 6px 14px;
+      font-size: 10.5px;
+    }
+
+    .chart-box {
+      height: 128px;
+    }
+
+    .toast-stack {
+      left: 10px;
+      right: 10px;
+      top: 10px;
+      max-width: none;
+    }
+
+    .toast {
+      padding: 10px 10px 10px 12px;
+    }
+
+    .toast-message {
+      font-size: 12px;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .field label,
+    .result-label {
+      letter-spacing: 1.1px;
+    }
+
+    .btn {
+      font-size: 12px;
+      letter-spacing: 1.2px;
+      padding: 13px;
+    }
+  }
 `;
 
 function ProfileButton({ setPage }) {

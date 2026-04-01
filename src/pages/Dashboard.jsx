@@ -204,6 +204,128 @@ const css = `
   /* Footer */
   .db-footer { text-align: center; margin-top: 48px; font-size: 11px; color: #1e2535; letter-spacing: 0.5px; }
   .db-footer span { color: #818cf8; }
+
+  @media (max-width: 900px) {
+    .db-page {
+      padding: 78px 12px 32px;
+    }
+
+    .db-back {
+      margin-bottom: 18px;
+      padding: 7px 14px;
+    }
+
+    .db-title {
+      font-size: 24px;
+    }
+
+    .db-summary {
+      gap: 10px;
+    }
+
+    .db-stat {
+      flex: 1 1 calc(50% - 10px);
+      padding: 14px;
+    }
+
+    .db-chart-wrap {
+      padding: 18px 14px;
+    }
+
+    .db-filter-bar {
+      gap: 6px;
+    }
+
+    .db-sort {
+      margin-left: 0;
+      width: 100%;
+      min-height: 38px;
+    }
+
+    .db-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .db-page {
+      padding: 72px 10px 22px;
+    }
+
+    .db-title {
+      font-size: 21px;
+      line-height: 1.25;
+    }
+
+    .db-subtitle {
+      font-size: 12px;
+    }
+
+    .db-summary {
+      margin-bottom: 18px;
+    }
+
+    .db-stat {
+      flex: 1 1 100%;
+    }
+
+    .db-stat-value {
+      font-size: 22px;
+    }
+
+    .db-chart-toggle {
+      width: 100%;
+    }
+
+    .db-toggle-btn {
+      flex: 1;
+      min-height: 36px;
+      padding: 7px 8px;
+    }
+
+    .bar-row {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .bar-label {
+      width: 100%;
+      text-align: left;
+    }
+
+    .bar-track {
+      width: 100%;
+    }
+
+    .bar-pct {
+      width: auto;
+    }
+
+    .pie-wrap {
+      gap: 18px;
+    }
+
+    .pie-legend {
+      min-width: 100%;
+    }
+
+    .db-filter-label {
+      width: 100%;
+      margin-right: 0;
+      margin-bottom: 4px;
+    }
+
+    .db-filter-btn {
+      min-height: 34px;
+      padding: 6px 12px;
+    }
+
+    .db-card {
+      padding: 16px 14px;
+    }
+  }
 `;
 
 // ─── Region → Countries data ──────────────────────────────────────────

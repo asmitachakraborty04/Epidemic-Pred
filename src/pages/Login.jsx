@@ -332,6 +332,61 @@ const styles = `
     color: rgba(200, 210, 230, 0.6);
     line-height: 1.2;
   }
+
+  @media (max-width: 768px) {
+    .esp-root {
+      align-items: flex-start;
+      padding: 18px 12px 26px;
+    }
+
+    .card {
+      border-radius: 18px;
+      padding: 24px 18px;
+      max-width: 100%;
+      margin-top: 8px;
+    }
+
+    .logo-mark {
+      margin-bottom: 20px;
+    }
+
+    .back-link {
+      justify-content: flex-start;
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
+    .title {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .subtitle,
+    .hint-text {
+      font-size: 12.5px;
+      margin-bottom: 20px;
+    }
+
+    .field input {
+      min-height: 44px;
+    }
+
+    .btn-primary {
+      min-height: 46px;
+      font-size: 14px;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .badge {
+      font-size: 10px;
+      padding: 4px 10px;
+    }
+
+    .title {
+      font-size: 22px;
+    }
+  }
 `;
 
 function VirusIcon() {

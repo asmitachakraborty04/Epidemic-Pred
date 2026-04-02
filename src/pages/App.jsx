@@ -10,6 +10,7 @@ const USERS_STORAGE_KEY = "outbreakx.users";
 const CURRENT_USER_STORAGE_KEY = "outbreakx.currentUserEmail";
 const API_BASE_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 const API_KEY = (import.meta.env.VITE_API_KEY || "").trim();
+const REQUEST_TIMEOUT_MS = 12000;
 const COUNTRY_FALLBACK_OPTIONS = [
   "Argentina",
   "Australia",
@@ -148,6 +149,14 @@ function readValidationDetailMessage(details) {
 }
 
 function readApiErrorMessage(error, fallbackMessage) {
+  if (error?.code === "ECONNABORTED") {
+    return "Server timeout. Please try again.";
+  }
+
+  if (!error?.response) {
+    return fallbackMessage || "Unable to connect to server. Please check if backend is running.";
+  }
+
   const detail = error?.response?.data?.detail;
   const errorPayload = error?.response?.data?.error;
   const validationMessage = readValidationDetailMessage(errorPayload?.details);
@@ -1013,7 +1022,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [regionError, setRegionError] = useState("");
   const [toasts, setToasts] = useState([]);
-  const [users, setUsers] = useState(() => loadStoredUsers());
+  const [users, setUsers] = useState([]);
   const [currentUserEmail, setCurrentUserEmail] = useState(() => loadStoredCurrentUserEmail());
   const [isRegionOpen, setIsRegionOpen] = useState(false);
   const regionDropdownRef = useRef(null);
@@ -1025,8 +1034,9 @@ export default function App() {
       return;
     }
 
-    window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-  }, [users]);
+    // Clear legacy cached user list so account state always reflects backend DB.
+    window.localStorage.removeItem(USERS_STORAGE_KEY);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1050,6 +1060,7 @@ export default function App() {
     async function syncCurrentUserFromApi() {
       try {
         const { data } = await axios.get(buildApiUrl("/users/profile"), withApiAuth({
+          timeout: REQUEST_TIMEOUT_MS,
           params: { email: currentUserEmail },
         }));
 
@@ -1061,6 +1072,9 @@ export default function App() {
       } catch (error) {
         if (!isCancelled) {
           console.error("Failed to sync user profile", error);
+          setUsers((prev) => prev.filter((user) => user.email !== currentUserEmail));
+          setCurrentUserEmail("");
+          addToast("Session cleared. Please log in again.", "info");
         }
       }
     }
@@ -1210,12 +1224,38 @@ export default function App() {
         name: name.trim(),
         email: normalizedEmail,
         password,
-      }, withApiAuth());
+      }, withApiAuth({ timeout: REQUEST_TIMEOUT_MS }));
 
       setUsers((prev) => upsertUser(prev, data));
       setCurrentUserEmail(data.email);
       return { ok: true };
     } catch (error) {
+      const statusCode = error?.response?.status;
+
+      if (statusCode === 409) {
+        try {
+          const { data } = await axios.post(buildApiUrl("/users/login"), {
+            email: normalizedEmail,
+            password,
+          }, withApiAuth({ timeout: REQUEST_TIMEOUT_MS }));
+
+          setCurrentUserEmail(data.email);
+          setUsers((prev) => upsertUser(prev, data));
+          return {
+            ok: true,
+            message: "Account already exists. Signed in successfully.",
+          };
+        } catch (loginError) {
+          if (loginError?.response?.status === 401) {
+            return {
+              ok: false,
+              field: "password",
+              error: "Account already exists for this email. Password is incorrect. Use Login or Forgot Password.",
+            };
+          }
+        }
+      }
+
       return {
         ok: false,
         field: "email",
@@ -1231,7 +1271,7 @@ export default function App() {
       const { data } = await axios.post(buildApiUrl("/users/login"), {
         email: normalizedEmail,
         password,
-      }, withApiAuth());
+      }, withApiAuth({ timeout: REQUEST_TIMEOUT_MS }));
 
       setCurrentUserEmail(data.email);
       setUsers((prev) => upsertUser(prev, data));
@@ -1254,7 +1294,7 @@ export default function App() {
     try {
       const { data } = await axios.post(buildApiUrl("/users/password/request"), {
         email: normalizedEmail,
-      }, withApiAuth());
+      }, withApiAuth({ timeout: REQUEST_TIMEOUT_MS }));
       return data;
     } catch (error) {
       return {
@@ -1271,7 +1311,7 @@ export default function App() {
       const { data } = await axios.post(buildApiUrl("/users/password/reset"), {
         email: normalizedEmail,
         password,
-      }, withApiAuth());
+      }, withApiAuth({ timeout: REQUEST_TIMEOUT_MS }));
       return data;
     } catch (error) {
       return {

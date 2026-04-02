@@ -227,7 +227,8 @@ export default function Signup({ setPage, onNotify, onSignup }) {
     });
 
     if (!signupResult?.ok) {
-      const fieldName = signupResult?.field === "name" ? "name" : "email";
+      const allowedField = ["name", "email", "password", "confirmPassword"];
+      const fieldName = allowedField.includes(signupResult?.field) ? signupResult.field : "email";
       setErrors((prev) => ({
         ...prev,
         [fieldName]: signupResult?.error || "We could not create your account right now.",
@@ -236,7 +237,10 @@ export default function Signup({ setPage, onNotify, onSignup }) {
       return;
     }
 
-    onNotify?.("Your account has been created successfully.", "success");
+    onNotify?.(
+      signupResult?.message || "Your account has been created successfully.",
+      "success",
+    );
     setPage("input");
   }
 

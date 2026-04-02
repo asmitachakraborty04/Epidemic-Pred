@@ -57,6 +57,27 @@ const css = `
     margin-bottom: 32px;
   }
 
+  .profile-back-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(129,140,248,0.35);
+    background: rgba(99,102,241,0.16);
+    color: #c7d2fe;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.15s, border-color 0.15s;
+  }
+
+  .profile-back-btn:hover {
+    transform: translateY(-1px);
+    background: rgba(99,102,241,0.26);
+    border-color: rgba(129,140,248,0.55);
+  }
+
   .page-title-badge {
     font-size: 10px;
     font-weight: 600;
@@ -487,7 +508,7 @@ function InfoCard({ icon, iconClass, label, value, isStatus }) {
   );
 }
 
-export default function Profile({ setPage, currentUser, onNotify, onSaveProfile, onLogout }) {
+export default function Profile({ setPage, currentUser, onNotify, onSaveProfile, onLogout, onBack }) {
   const [editMode, setEditMode] = useState(false);
   const [draft, setDraft] = useState({
     name: currentUser?.name || "",
@@ -565,6 +586,17 @@ export default function Profile({ setPage, currentUser, onNotify, onSaveProfile,
     }
   }
 
+  function handleBack() {
+    if (typeof onBack === "function") {
+      onBack();
+      return;
+    }
+
+    if (typeof setPage === "function") {
+      setPage("input");
+    }
+  }
+
   return (
     <>
       <style>{css}</style>
@@ -573,6 +605,15 @@ export default function Profile({ setPage, currentUser, onNotify, onSaveProfile,
 
           {/* Title */}
           <div className="page-title-row">
+            <button
+              type="button"
+              className="profile-back-btn"
+              onClick={handleBack}
+              aria-label="Go back"
+              title="Back"
+            >
+              ←
+            </button>
             <div className="page-title-badge">
               <span className="pulse-dot" />
               OutbreakX
@@ -746,9 +787,6 @@ export default function Profile({ setPage, currentUser, onNotify, onSaveProfile,
               </>
             ) : (
               <>
-                <button className="btn btn-primary" onClick={handleEdit}>
-                  Edit Profile
-                </button>
                 <button className="btn btn-outline" onClick={handleLogout}>
                   Logout
                 </button>

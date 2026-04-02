@@ -295,6 +295,54 @@ const css = `
     overflow: hidden;
   }
 
+  .app-topbar {
+    width: 100%;
+    max-width: 1040px;
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .mobile-nav {
+    display: none;
+  }
+
+  .mobile-nav-btn {
+    border: 1px solid rgba(129,140,248,0.28);
+    background: rgba(99,102,241,0.14);
+    color: #c7d2fe;
+    border-radius: 12px;
+    padding: 8px 10px;
+    min-width: 78px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.15s, border-color 0.15s, opacity 0.15s;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .mobile-nav-btn:hover {
+    transform: translateY(-1px);
+    background: rgba(99,102,241,0.24);
+    border-color: rgba(129,140,248,0.5);
+  }
+
+  .mobile-nav-btn.active {
+    background: linear-gradient(135deg, rgba(99,102,241,0.4), rgba(79,70,229,0.32));
+    border-color: rgba(129,140,248,0.62);
+    color: #eef2ff;
+  }
+
+  .mobile-nav-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+  }
+
   .page::before {
     content: '';
     position: fixed;
@@ -313,10 +361,8 @@ const css = `
   }
 
   .profile-btn {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    z-index: 200;
+    position: relative;
+    z-index: 2;
     width: 44px;
     height: 44px;
     border-radius: 50%;
@@ -953,12 +999,31 @@ const css = `
   @media (max-width: 768px) {
     .page {
       align-items: flex-start;
-      padding: 78px 12px 24px;
+      padding: 78px 12px 92px;
+    }
+
+    .app-topbar {
+      display: none;
+    }
+
+    .mobile-nav {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 10px;
+      z-index: 260;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 10px;
+      border-radius: 16px;
+      background: rgba(8, 12, 20, 0.86);
+      border: 1px solid rgba(99,102,241,0.26);
+      box-shadow: 0 14px 34px rgba(0,0,0,0.46);
+      backdrop-filter: blur(12px);
     }
 
     .profile-btn {
-      top: 12px;
-      left: 12px;
       width: 40px;
       height: 40px;
       font-size: 18px;
@@ -1050,6 +1115,35 @@ function ProfileButton({ setPage }) {
   );
 }
 
+function MobileBottomNav({ page, hasPredictionResult, setPage }) {
+  return (
+    <div className="mobile-nav" aria-label="Primary navigation">
+      <button
+        type="button"
+        className={`mobile-nav-btn ${page === "input" ? "active" : ""}`}
+        onClick={() => setPage("input")}
+      >
+        Home
+      </button>
+      <button
+        type="button"
+        className={`mobile-nav-btn ${page === "dashboard" ? "active" : ""}`}
+        onClick={() => setPage("dashboard")}
+        disabled={!hasPredictionResult}
+      >
+        Dashboard
+      </button>
+      <button
+        type="button"
+        className={`mobile-nav-btn ${page === "profile" ? "active" : ""}`}
+        onClick={() => setPage("profile")}
+      >
+        Profile
+      </button>
+    </div>
+  );
+}
+
 function ToastStack({ toasts, onDismiss }) {
   return (
     <div className="toast-stack" aria-live="polite" aria-atomic="false">
@@ -1092,6 +1186,7 @@ export default function App() {
   const [users, setUsers] = useState([]);
   const [currentUserEmail, setCurrentUserEmail] = useState(() => loadStoredCurrentUserEmail());
   const [isRegionOpen, setIsRegionOpen] = useState(false);
+  const [lastNonProfilePage, setLastNonProfilePage] = useState("input");
   const regionDropdownRef = useRef(null);
 
   const currentUser = users.find((user) => user.email === currentUserEmail) || null;
@@ -1116,6 +1211,12 @@ export default function App() {
       window.localStorage.removeItem(CURRENT_USER_STORAGE_KEY);
     }
   }, [currentUserEmail]);
+
+  useEffect(() => {
+    if (page !== "profile") {
+      setLastNonProfilePage(page);
+    }
+  }, [page]);
 
   useEffect(() => {
     if (!currentUserEmail) {
@@ -1555,12 +1656,15 @@ export default function App() {
         onNotify={addToast}
         onSaveProfile={updateCurrentUserProfile}
         onLogout={logoutCurrentUser}
+        onBack={() => setPage(lastNonProfilePage === "profile" ? "input" : lastNonProfilePage)}
       />
     );
   } else {
     pageContent = (
       <div className="page">
-        <ProfileButton setPage={setPage} />
+        <div className="app-topbar">
+          <ProfileButton setPage={setPage} />
+        </div>
 
         {page === "input" && (
           <div className="card">
@@ -1694,6 +1798,12 @@ export default function App() {
             onBack={() => setPage("input")}
           />
         )}
+
+        <MobileBottomNav
+          page={page}
+          hasPredictionResult={hasPredictionResult}
+          setPage={setPage}
+        />
       </div>
     );
   }

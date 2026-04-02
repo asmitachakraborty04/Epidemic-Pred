@@ -44,6 +44,22 @@ const COUNTRY_FALLBACK_OPTIONS = [
   "United States",
 ];
 
+const DEFAULT_MAP_PREVIEW_URL = "https://staticmap.openstreetmap.de/staticmap.php?center=20,0&zoom=1&size=760x300&maptype=mapnik";
+const DEFAULT_MAP_PAGE_URL = "https://www.openstreetmap.org/#map=2/20/0";
+
+const COUNTRY_MAP_QUERY_ALIASES = {
+  USA: "United States",
+  UK: "United Kingdom",
+  "S. Korea": "South Korea",
+  "N. Korea": "North Korea",
+  DRC: "Democratic Republic of the Congo",
+  "Syrian Arab Republic": "Syria",
+  "West Bank and Gaza": "Palestine",
+  "Libyan Arab Jamahiriya": "Libya",
+  Macedonia: "North Macedonia",
+  UAE: "United Arab Emirates",
+};
+
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
 }
@@ -177,6 +193,59 @@ function getHotspotMeta(level) {
   }
 
   return { label: "Unknown", short: "—", color: "#94a3b8" };
+}
+
+function resolveCountryLookupName(country) {
+  const normalizedCountry = String(country || "").trim();
+  return COUNTRY_MAP_QUERY_ALIASES[normalizedCountry] || normalizedCountry;
+}
+
+function markerStyleFromRisk(risk) {
+  if (risk === "High") return "red-pushpin";
+  if (risk === "Medium") return "yellow-pushpin";
+  if (risk === "Low") return "green-pushpin";
+  return "lightblue1";
+}
+
+function buildMapPreviewUrl(lat, lon, markerStyle) {
+  const latValue = Number(lat).toFixed(4);
+  const lonValue = Number(lon).toFixed(4);
+  return `https://staticmap.openstreetmap.de/staticmap.php?center=${latValue},${lonValue}&zoom=3&size=760x300&maptype=mapnik&markers=${latValue},${lonValue},${markerStyle}`;
+}
+
+function buildMapPageUrl(countryName, lat, lon) {
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    const latValue = Number(lat).toFixed(4);
+    const lonValue = Number(lon).toFixed(4);
+    return `https://www.openstreetmap.org/?mlat=${latValue}&mlon=${lonValue}#map=4/${latValue}/${lonValue}`;
+  }
+
+  const query = encodeURIComponent(resolveCountryLookupName(countryName));
+  return `https://www.openstreetmap.org/search?query=${query}`;
+}
+
+function CountryMapPreview({ previewUrl, fullMapUrl, country, isMapLoading }) {
+  const mapLabel = country ? `Open map for ${country}` : "Open world map";
+
+  return (
+    <a
+      className={`map-preview-link ${isMapLoading ? "is-loading" : ""}`}
+      href={fullMapUrl || DEFAULT_MAP_PAGE_URL}
+      target="_blank"
+      rel="noreferrer noopener"
+      aria-label={mapLabel}
+      title={mapLabel}
+    >
+      <img
+        className="map-preview-image"
+        src={previewUrl || DEFAULT_MAP_PREVIEW_URL}
+        alt={country ? `Map preview for ${country}` : "World map preview"}
+        loading="lazy"
+      />
+      <span className="map-open-icon" aria-hidden="true">↗</span>
+      {isMapLoading ? <span className="map-loading-overlay" /> : null}
+    </a>
+  );
 }
 
 const css = `
@@ -611,46 +680,64 @@ const css = `
     background-size: 32px 32px;
   }
 
-  .chart-icon { font-size: 28px; opacity: 0.25; position: relative; z-index: 1; }
-
-  .chart-text {
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 1px;
-    color: #2e3a52;
-    text-transform: uppercase;
-    position: relative;
-    z-index: 1;
+  .map-preview-link {
+    position: absolute;
+    inset: 8px;
+    z-index: 2;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(129, 140, 248, 0.2);
+    display: block;
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .chart-meta {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    gap: 6px;
+  .map-preview-link:hover {
+    border-color: rgba(129, 140, 248, 0.45);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.35);
+  }
+
+  .map-preview-image {
     width: 100%;
-    max-width: 360px;
-    padding: 0 16px;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    filter: saturate(0.95) contrast(1.04);
   }
 
-  .chart-meta-row {
+  .map-preview-link.is-loading .map-preview-image {
+    filter: saturate(0.65) contrast(0.9) blur(0.6px);
+  }
+
+  .map-open-icon {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(129, 140, 248, 0.45);
+    color: #c7d2fe;
     display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    font-size: 11px;
-    letter-spacing: 0.4px;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    line-height: 1;
+    z-index: 3;
   }
 
-  .chart-meta-label {
-    color: #4b5675;
-    text-transform: uppercase;
-    font-weight: 700;
+  .map-loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, rgba(15, 23, 42, 0.05) 10%, rgba(15, 23, 42, 0.42) 50%, rgba(15, 23, 42, 0.05) 90%);
+    animation: map-sheen 1.2s linear infinite;
+    z-index: 2;
   }
 
-  .chart-meta-value {
-    color: #cbd5e1;
-    font-weight: 600;
-    text-align: right;
+  @keyframes map-sheen {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
   }
 
   .model-summary-pill {
@@ -919,8 +1006,10 @@ export default function App() {
   const [shake, setShake] = useState(false);
   const [backendConnected, setBackendConnected] = useState(null);
   const [responseRegions, setResponseRegions] = useState(null);
-  const [modelEvidence, setModelEvidence] = useState(null);
   const [modelSummary, setModelSummary] = useState(null);
+  const [mapPreviewUrl, setMapPreviewUrl] = useState(DEFAULT_MAP_PREVIEW_URL);
+  const [mapPageUrl, setMapPageUrl] = useState(DEFAULT_MAP_PAGE_URL);
+  const [isMapLoading, setIsMapLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [regionError, setRegionError] = useState("");
   const [toasts, setToasts] = useState([]);
@@ -1020,6 +1109,66 @@ export default function App() {
       isCancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const mapCountry = String(region || submittedRegion || "").trim();
+
+    if (!mapCountry) {
+      setMapPreviewUrl(DEFAULT_MAP_PREVIEW_URL);
+      setMapPageUrl(DEFAULT_MAP_PAGE_URL);
+      setIsMapLoading(false);
+      return undefined;
+    }
+
+    const lookupName = resolveCountryLookupName(mapCountry);
+    const markerStyle = markerStyleFromRisk(risk);
+
+    async function resolveMap() {
+      setIsMapLoading(true);
+
+      const endpoints = [
+        `https://restcountries.com/v3.1/name/${encodeURIComponent(lookupName)}?fullText=true&fields=latlng`,
+        `https://restcountries.com/v3.1/name/${encodeURIComponent(lookupName)}?fields=latlng`,
+      ];
+
+      for (const endpoint of endpoints) {
+        try {
+          const { data } = await axios.get(endpoint, { timeout: 7000 });
+          const row = Array.isArray(data) ? data[0] : null;
+          const latlng = Array.isArray(row?.latlng) ? row.latlng : [];
+          const latitude = Number(latlng[0]);
+          const longitude = Number(latlng[1]);
+
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            continue;
+          }
+
+          if (!isCancelled) {
+            setMapPreviewUrl(buildMapPreviewUrl(latitude, longitude, markerStyle));
+            setMapPageUrl(buildMapPageUrl(mapCountry, latitude, longitude));
+            setIsMapLoading(false);
+          }
+
+          return;
+        } catch (error) {
+          continue;
+        }
+      }
+
+      if (!isCancelled) {
+        setMapPreviewUrl(DEFAULT_MAP_PREVIEW_URL);
+        setMapPageUrl(buildMapPageUrl(lookupName));
+        setIsMapLoading(false);
+      }
+    }
+
+    resolveMap();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [region, submittedRegion, risk]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1228,7 +1377,6 @@ export default function App() {
         : null;
       setRiskScore(firstRegionRisk);
       setHotspotLevel(Number.isInteger(data.hotspot_level) ? data.hotspot_level : null);
-      setModelEvidence(data.model_evidence && typeof data.model_evidence === "object" ? data.model_evidence : null);
       const resolvedRegion = data.country || data.region || requestPayload.country;
       setSubmittedRegion(resolvedRegion);
       setResponseRegions(Array.isArray(data.regions) ? data.regions : null);
@@ -1258,7 +1406,6 @@ export default function App() {
       setPredictedCases(null);
       setRiskScore(null);
       setHotspotLevel(null);
-      setModelEvidence(null);
       setSubmittedRegion(requestPayload.country);
       setResponseRegions(null);
 
@@ -1299,7 +1446,6 @@ export default function App() {
   const selectedMetricLabel = "Risk Level";
   const selectedMetricValue = hasPredictionResult && risk ? risk : "—";
   const runAssessmentLabel = "Generate Full Outbreak Report";
-  const trendHelperText = "Run prediction to view combined risk, cases, and hotspot trends";
 
   let pageContent;
 
@@ -1380,7 +1526,6 @@ export default function App() {
                             setPredictedCases(null);
                             setRiskScore(null);
                             setHotspotLevel(null);
-                            setModelEvidence(null);
                             setBackendConnected(null);
                             setSubmittedRegion("");
                             setResponseRegions(null);
@@ -1437,36 +1582,12 @@ export default function App() {
             </div>
 
             <div className="chart-box">
-              {hasPredictionResult && modelEvidence ? (
-                <div className="chart-meta">
-                  <div className="chart-meta-row">
-                    <span className="chart-meta-label">Scoring</span>
-                    <span className="chart-meta-value">{modelEvidence.scoring || "model"}</span>
-                  </div>
-                  <div className="chart-meta-row">
-                    <span className="chart-meta-label">Raw Model Score</span>
-                    <span className="chart-meta-value">
-                      {typeof modelEvidence.raw_model_score === "number" ? modelEvidence.raw_model_score.toFixed(2) : "—"}
-                    </span>
-                  </div>
-                  <div className="chart-meta-row">
-                    <span className="chart-meta-label">Final Risk Score</span>
-                    <span className="chart-meta-value">
-                      {typeof modelEvidence.final_risk_score === "number"
-                        ? `${Math.round(modelEvidence.final_risk_score)}%`
-                        : typeof modelEvidence.percentile_score === "number"
-                          ? `${Math.round(modelEvidence.percentile_score)}%`
-                          : "—"}
-                    </span>
-                  </div>
-                  <div className="chart-meta-row">
-                    <span className="chart-meta-label">Feature Date</span>
-                    <span className="chart-meta-value">{modelEvidence.feature_snapshot_date || "—"}</span>
-                  </div>
-                </div>
-              ) : (
-                <span className="chart-text">{trendHelperText}</span>
-              )}
+              <CountryMapPreview
+                previewUrl={mapPreviewUrl}
+                fullMapUrl={mapPageUrl}
+                country={region || submittedRegion}
+                isMapLoading={isMapLoading}
+              />
             </div>
 
             {modelSummary?.risk_label_counts && (

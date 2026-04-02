@@ -22,21 +22,26 @@ const css = `
     position: relative;
     overflow-x: hidden;
   }
-  .db-page::before {
-    content: '';
-    position: fixed;
-    top: -160px; left: -160px;
-    width: 520px; height: 520px;
-    background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%);
-    pointer-events: none; z-index: 0;
-  }
+  .db-page::before,
   .db-page::after {
     content: '';
     position: fixed;
-    bottom: -180px; right: -140px;
-    width: 480px; height: 480px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .db-page::before {
+    top: -160px;
+    left: -160px;
+    width: 520px;
+    height: 520px;
+    background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%);
+  }
+  .db-page::after {
+    bottom: -180px;
+    right: -140px;
+    width: 480px;
+    height: 480px;
     background: radial-gradient(circle, rgba(236,72,153,0.13) 0%, transparent 70%);
-    pointer-events: none; z-index: 0;
   }
 
   .db-inner {
@@ -60,7 +65,7 @@ const css = `
   .db-back:hover { background: rgba(99,102,241,0.1); border-color: rgba(99,102,241,0.3); color: #818cf8; }
 
   /* Header */
-  .db-header { text-align: center; margin-bottom: 36px; }
+  .db-header { text-align: left; margin-bottom: 36px; }
   .db-tag {
     display: inline-flex; align-items: center; gap: 6px;
     background: rgba(99,102,241,0.15); color: #818cf8;

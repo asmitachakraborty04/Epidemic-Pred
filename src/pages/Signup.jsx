@@ -241,7 +241,7 @@ export default function Signup({ setPage, onNotify, onSignup }) {
       signupResult?.message || "Your account has been created successfully.",
       "success",
     );
-    setPage("input");
+    setPage(signupResult?.nextPage || "input");
   }
 
   return (

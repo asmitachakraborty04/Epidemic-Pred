@@ -464,7 +464,7 @@ export default function Login({
     }
 
     onNotify?.("Sign-in successful.", "success");
-    setPage("input");
+    setPage(loginResult?.nextPage || "input");
   }
 
   async function handleForgotSubmit() {

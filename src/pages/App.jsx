@@ -204,6 +204,28 @@ function getHotspotMeta(level) {
   return { label: "Unknown", short: "—", color: "#94a3b8" };
 }
 
+function riskLabelFromScore(score) {
+  if (!Number.isFinite(score)) {
+    return "Low";
+  }
+
+  if (score >= 67) {
+    return "High";
+  }
+
+  if (score >= 40) {
+    return "Medium";
+  }
+
+  return "Low";
+}
+
+function mapLegendTone(riskLabel) {
+  if (riskLabel === "High") return "high";
+  if (riskLabel === "Medium") return "medium";
+  return "low";
+}
+
 function resolveCountryLookupName(country) {
   const normalizedCountry = String(country || "").trim();
   return COUNTRY_MAP_QUERY_ALIASES[normalizedCountry] || normalizedCountry;
@@ -274,6 +296,27 @@ function CountryMapPreview({ embedUrl, fullMapUrl, country, isMapLoading, risk }
       <span className={`map-risk-chip ${toneClass}`}>{risk || "Unknown"}</span>
       {isMapLoading ? <span className="map-loading-overlay" /> : null}
     </a>
+  );
+}
+
+function MapRiskLegend({ rows = [] }) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="map-region-legend" aria-label="Region country risk legend">
+      {rows.map((row) => {
+        const tone = mapLegendTone(row.riskLabel);
+        return (
+          <div className="map-region-item" key={`${row.name}-${row.riskLabel}`}>
+            <span className={`map-region-dot ${tone}`} aria-hidden="true" />
+            <span className="map-region-text">{`Regions.${row.name}`}</span>
+            <span className={`map-region-risk ${tone}`}>{row.riskLabel}</span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -867,6 +910,55 @@ const css = `
     z-index: 2;
   }
 
+  .map-region-legend {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .map-region-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 6px 8px;
+    min-width: 0;
+  }
+
+  .map-region-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .map-region-dot.high { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.55); }
+  .map-region-dot.medium { background: #facc15; box-shadow: 0 0 8px rgba(250, 204, 21, 0.5); }
+  .map-region-dot.low { background: #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.45); }
+
+  .map-region-text {
+    font-size: 11px;
+    color: #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  .map-region-risk {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+
+  .map-region-risk.high { color: #f87171; }
+  .map-region-risk.medium { color: #fbbf24; }
+  .map-region-risk.low { color: #4ade80; }
+
   @keyframes map-sheen {
     0% { transform: translateX(-100%); }
     100% { transform: translateX(100%); }
@@ -1073,6 +1165,10 @@ const css = `
       grid-template-columns: 1fr;
     }
 
+    .map-region-legend {
+      grid-template-columns: 1fr;
+    }
+
     .toast-stack {
       left: 10px;
       right: 10px;
@@ -1123,7 +1219,7 @@ function MobileBottomNav({ page, hasPredictionResult, setPage }) {
         className={`mobile-nav-btn ${page === "input" ? "active" : ""}`}
         onClick={() => setPage("input")}
       >
-        Home
+        Analysis
       </button>
       <button
         type="button"
@@ -1361,6 +1457,49 @@ export default function App() {
     setTimeout(() => removeToast(toastId), 3200);
   }
 
+  async function fetchLatestPredictionForRegion(regionName) {
+    if (!regionName) {
+      return null;
+    }
+
+    try {
+      const { data } = await axios.get(buildApiUrl("/history"), withApiAuth({ timeout: REQUEST_TIMEOUT_MS }));
+      const items = Array.isArray(data) ? data : [];
+      const normalizedRegion = String(regionName).trim().toLowerCase();
+      const match = [...items].reverse().find((item) => String(item?.region || "").trim().toLowerCase() === normalizedRegion);
+      return match || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async function hydratePostAuthDashboard(userProfile) {
+    const predictionsCount = Number(userProfile?.predictionsCount || 0);
+    const savedRegion = String(userProfile?.region || "").trim();
+    const savedRisk = String(userProfile?.lastPrediction || "").trim();
+    const hasSavedRegion = savedRegion && !/not selected/i.test(savedRegion);
+    const hasSavedRisk = /^(High|Medium|Low)$/i.test(savedRisk);
+
+    if (!(predictionsCount > 0 && hasSavedRegion)) {
+      return "input";
+    }
+
+    const historyEntry = await fetchLatestPredictionForRegion(savedRegion);
+    const normalizedRisk = hasSavedRisk
+      ? savedRisk.charAt(0).toUpperCase() + savedRisk.slice(1).toLowerCase()
+      : riskLabelFromScore(Number(historyEntry?.risk_score));
+
+    setRegion(savedRegion);
+    setSubmittedRegion(savedRegion);
+    setRisk(normalizedRisk);
+    setBackendConnected(true);
+    setResponseRegions(null);
+    setPredictedCases(Number.isFinite(Number(historyEntry?.predicted_cases)) ? Number(historyEntry?.predicted_cases) : null);
+    setHotspotLevel(Number.isInteger(historyEntry?.hotspot_level) ? historyEntry.hotspot_level : null);
+    setRiskScore(Number.isFinite(Number(historyEntry?.risk_score)) ? Number(historyEntry.risk_score) : null);
+    return "dashboard";
+  }
+
   async function signupUser({ name, email, password }) {
     const normalizedEmail = normalizeEmail(email);
 
@@ -1373,7 +1512,8 @@ export default function App() {
 
       setUsers((prev) => upsertUser(prev, data));
       setCurrentUserEmail(data.email);
-      return { ok: true };
+      const nextPage = await hydratePostAuthDashboard(data);
+      return { ok: true, nextPage };
     } catch (error) {
       const statusCode = error?.response?.status;
 
@@ -1386,8 +1526,10 @@ export default function App() {
 
           setCurrentUserEmail(data.email);
           setUsers((prev) => upsertUser(prev, data));
+          const nextPage = await hydratePostAuthDashboard(data);
           return {
             ok: true,
+            nextPage,
             message: "Account already exists. Signed in successfully.",
           };
         } catch (loginError) {
@@ -1420,7 +1562,8 @@ export default function App() {
 
       setCurrentUserEmail(data.email);
       setUsers((prev) => upsertUser(prev, data));
-      return { ok: true };
+      const nextPage = await hydratePostAuthDashboard(data);
+      return { ok: true, nextPage };
     } catch (error) {
       const statusCode = error?.response?.status;
       const detailField = error?.response?.data?.error?.details?.[0]?.loc?.slice(-1)?.[0];
@@ -1631,6 +1774,24 @@ export default function App() {
   const selectedMetricLabel = "Risk Level";
   const selectedMetricValue = hasPredictionResult && risk ? risk : "—";
   const runAssessmentLabel = "Generate Full Outbreak Report";
+  const mapLegendRows = (() => {
+    if (Array.isArray(responseRegions) && responseRegions.length > 0) {
+      return responseRegions.slice(0, 6).map((entry, index) => {
+        const name = String(entry?.name || entry?.country || `Country ${index + 1}`).trim();
+        const score = Number(entry?.risk);
+        return {
+          name,
+          riskLabel: riskLabelFromScore(score),
+        };
+      });
+    }
+
+    if (hasPredictionResult && submittedRegion && risk) {
+      return [{ name: submittedRegion, riskLabel: risk }];
+    }
+
+    return [];
+  })();
 
   let pageContent;
 
@@ -1674,7 +1835,7 @@ export default function App() {
                 AI · Epidemiology
               </div>
               <h1 className="title">OutbreakX</h1>
-              <p className="subtitle">Select a country to assess outbreak risk</p>
+              <p className="subtitle">Input / Analysis Page · Select a country to assess outbreak risk</p>
             </div>
 
             <hr className="divider" />
@@ -1778,6 +1939,8 @@ export default function App() {
                 risk={risk}
               />
             </div>
+
+            <MapRiskLegend rows={mapLegendRows} />
 
             {hasPredictionResult && (
               <button className="btn btn-secondary" onClick={() => setPage("dashboard")} type="button">

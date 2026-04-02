@@ -10,22 +10,38 @@ const USERS_STORAGE_KEY = "outbreakx.users";
 const CURRENT_USER_STORAGE_KEY = "outbreakx.currentUserEmail";
 const API_BASE_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 const API_KEY = (import.meta.env.VITE_API_KEY || "").trim();
-const REGION_OPTIONS = [
-  "South Asia",
-  "Southeast Asia",
-  "East Asia",
-  "Europe",
-  "Middle East",
-  "West Africa",
-  "East Africa",
-  "North Africa",
-  "Southern Africa",
-  "Central Africa",
-  "North America",
-  "South America",
-  "Central Asia",
-  "Caribbean",
-  "Oceania",
+const COUNTRY_FALLBACK_OPTIONS = [
+  "Argentina",
+  "Australia",
+  "Bangladesh",
+  "Brazil",
+  "Canada",
+  "China",
+  "Egypt",
+  "France",
+  "Germany",
+  "India",
+  "Indonesia",
+  "Iran",
+  "Italy",
+  "Japan",
+  "Kenya",
+  "Mexico",
+  "Morocco",
+  "Nepal",
+  "Nigeria",
+  "Pakistan",
+  "Peru",
+  "Philippines",
+  "Russia",
+  "Saudi Arabia",
+  "South Africa",
+  "South Korea",
+  "Spain",
+  "Sri Lanka",
+  "Turkey",
+  "United Kingdom",
+  "United States",
 ];
 
 function normalizeEmail(email) {
@@ -607,6 +623,45 @@ const css = `
     z-index: 1;
   }
 
+  .chart-meta {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 6px;
+    width: 100%;
+    max-width: 360px;
+    padding: 0 16px;
+  }
+
+  .chart-meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 11px;
+    letter-spacing: 0.4px;
+  }
+
+  .chart-meta-label {
+    color: #4b5675;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+
+  .chart-meta-value {
+    color: #cbd5e1;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  .model-summary-pill {
+    margin-top: 8px;
+    font-size: 10px;
+    color: #6b7a96;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+
   .metric-grid {
     margin-top: 12px;
     display: grid;
@@ -854,6 +909,7 @@ function ToastStack({ toasts, onDismiss }) {
 
 export default function App() {
   const [region, setRegion] = useState("");
+  const [countryOptions, setCountryOptions] = useState(COUNTRY_FALLBACK_OPTIONS);
   const [page, setPage] = useState("landing");
   const [risk, setRisk] = useState(null);
   const [predictedCases, setPredictedCases] = useState(null);
@@ -863,6 +919,8 @@ export default function App() {
   const [shake, setShake] = useState(false);
   const [backendConnected, setBackendConnected] = useState(null);
   const [responseRegions, setResponseRegions] = useState(null);
+  const [modelEvidence, setModelEvidence] = useState(null);
+  const [modelSummary, setModelSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [regionError, setRegionError] = useState("");
   const [toasts, setToasts] = useState([]);
@@ -937,6 +995,51 @@ export default function App() {
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
       document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function fetchCountryOptions() {
+      try {
+        const { data } = await axios.get(buildApiUrl("/countries"), withApiAuth());
+        const countries = Array.isArray(data?.countries) ? data.countries.filter(Boolean) : [];
+        if (!isCancelled && countries.length > 0) {
+          setCountryOptions(countries);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Failed to fetch country list", error);
+        }
+      }
+    }
+
+    fetchCountryOptions();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function fetchModelSummary() {
+      try {
+        const { data } = await axios.get(buildApiUrl("/model/summary"), withApiAuth());
+        if (!isCancelled && data && typeof data === "object") {
+          setModelSummary(data);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Failed to fetch model summary", error);
+        }
+      }
+    }
+
+    fetchModelSummary();
+    return () => {
+      isCancelled = true;
     };
   }, []);
 
@@ -1096,10 +1199,10 @@ export default function App() {
 
   async function handlePredict() {
     if (!region.trim()) {
-      setRegionError("Please select a region to start the outbreak assessment.");
+      setRegionError("Please select a country to start the outbreak assessment.");
       setShake(true);
       setTimeout(() => setShake(false), 400);
-      addToast("Select a region before starting the assessment.", "error");
+      addToast("Select a country before starting the assessment.", "error");
       return;
     }
 
@@ -1108,7 +1211,7 @@ export default function App() {
     setRegionError("");
     setBackendConnected(null);
 
-    const requestPayload = { region: region.trim() };
+    const requestPayload = { country: region.trim() };
 
     try {
       const apiUrl = buildApiUrl("/predict");
@@ -1125,7 +1228,8 @@ export default function App() {
         : null;
       setRiskScore(firstRegionRisk);
       setHotspotLevel(Number.isInteger(data.hotspot_level) ? data.hotspot_level : null);
-      const resolvedRegion = data.region || requestPayload.region;
+      setModelEvidence(data.model_evidence && typeof data.model_evidence === "object" ? data.model_evidence : null);
+      const resolvedRegion = data.country || data.region || requestPayload.country;
       setSubmittedRegion(resolvedRegion);
       setResponseRegions(Array.isArray(data.regions) ? data.regions : null);
 
@@ -1154,7 +1258,8 @@ export default function App() {
       setPredictedCases(null);
       setRiskScore(null);
       setHotspotLevel(null);
-      setSubmittedRegion(requestPayload.region);
+      setModelEvidence(null);
+      setSubmittedRegion(requestPayload.country);
       setResponseRegions(null);
 
       if (currentUserEmail) {
@@ -1163,7 +1268,7 @@ export default function App() {
             user.email === currentUserEmail
               ? {
                   ...user,
-                  region: requestPayload.region,
+                  region: requestPayload.country,
                   lastPrediction: "Unavailable",
                   predictionsCount: (user.predictionsCount || 0) + 1,
                 }
@@ -1171,10 +1276,11 @@ export default function App() {
           ),
         );
 
-        await syncPredictionToUser(currentUserEmail, requestPayload.region, "Unavailable");
+        await syncPredictionToUser(currentUserEmail, requestPayload.country, "Unavailable");
       }
 
-      addToast("Backend unavailable. Please try again.", "error");
+      const userMessage = readApiErrorMessage(error, "Prediction failed for this country. Please choose another one.");
+      addToast(userMessage, "error");
     } finally {
       setIsLoading(false);
     }
@@ -1234,14 +1340,14 @@ export default function App() {
                 AI · Epidemiology
               </div>
               <h1 className="title">OutbreakX</h1>
-              <p className="subtitle">Enter a region to assess outbreak risk</p>
+              <p className="subtitle">Select a country to assess outbreak risk</p>
             </div>
 
             <hr className="divider" />
 
             <div className={shake ? "shake" : ""}>
               <div className="field">
-                <label>Region</label>
+                <label>Country</label>
                 <div
                   className={`dropdown ${isRegionOpen ? "is-open" : ""} ${regionError ? "input-error" : ""}`}
                   ref={regionDropdownRef}
@@ -1257,13 +1363,13 @@ export default function App() {
                     disabled={isLoading}
                   >
                     <span className={`dropdown-value ${!region ? "placeholder" : ""}`}>
-                      {region || "Select a region"}
+                      {region || "Select a country"}
                     </span>
                   </button>
                   <span className="dropdown-caret">{isRegionOpen ? "▲" : "▼"}</span>
                   {isRegionOpen && (
                     <div className="dropdown-menu">
-                      {REGION_OPTIONS.map((regionName) => (
+                      {countryOptions.map((regionName) => (
                         <button
                           key={regionName}
                           type="button"
@@ -1274,6 +1380,7 @@ export default function App() {
                             setPredictedCases(null);
                             setRiskScore(null);
                             setHotspotLevel(null);
+                            setModelEvidence(null);
                             setBackendConnected(null);
                             setSubmittedRegion("");
                             setResponseRegions(null);
@@ -1330,8 +1437,46 @@ export default function App() {
             </div>
 
             <div className="chart-box">
-              <span className="chart-text">{trendHelperText}</span>
+              {hasPredictionResult && modelEvidence ? (
+                <div className="chart-meta">
+                  <div className="chart-meta-row">
+                    <span className="chart-meta-label">Scoring</span>
+                    <span className="chart-meta-value">{modelEvidence.scoring || "model"}</span>
+                  </div>
+                  <div className="chart-meta-row">
+                    <span className="chart-meta-label">Raw Model Score</span>
+                    <span className="chart-meta-value">
+                      {typeof modelEvidence.raw_model_score === "number" ? modelEvidence.raw_model_score.toFixed(2) : "—"}
+                    </span>
+                  </div>
+                  <div className="chart-meta-row">
+                    <span className="chart-meta-label">Final Risk Score</span>
+                    <span className="chart-meta-value">
+                      {typeof modelEvidence.final_risk_score === "number"
+                        ? `${Math.round(modelEvidence.final_risk_score)}%`
+                        : typeof modelEvidence.percentile_score === "number"
+                          ? `${Math.round(modelEvidence.percentile_score)}%`
+                          : "—"}
+                    </span>
+                  </div>
+                  <div className="chart-meta-row">
+                    <span className="chart-meta-label">Feature Date</span>
+                    <span className="chart-meta-value">{modelEvidence.feature_snapshot_date || "—"}</span>
+                  </div>
+                </div>
+              ) : (
+                <span className="chart-text">{trendHelperText}</span>
+              )}
             </div>
+
+            {modelSummary?.risk_label_counts && (
+              <p className="model-summary-pill">
+                Dataset: {modelSummary.countries_considered || 0} countries ·
+                Low {modelSummary.risk_label_counts.Low ?? 0} ·
+                Medium {modelSummary.risk_label_counts.Medium ?? 0} ·
+                High {modelSummary.risk_label_counts.High ?? 0}
+              </p>
+            )}
 
             {hasPredictionResult && (
               <button className="btn btn-secondary" onClick={() => setPage("dashboard")} type="button">

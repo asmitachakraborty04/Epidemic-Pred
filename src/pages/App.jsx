@@ -45,7 +45,7 @@ const COUNTRY_FALLBACK_OPTIONS = [
   "United States",
 ];
 
-const DEFAULT_MAP_PREVIEW_URL = "https://staticmap.openstreetmap.de/staticmap.php?center=20,0&zoom=1&size=760x300&maptype=mapnik";
+const DEFAULT_MAP_EMBED_URL = "https://www.openstreetmap.org/export/embed.html?bbox=-170%2C-60%2C170%2C80&layer=mapnik";
 const DEFAULT_MAP_PAGE_URL = "https://www.openstreetmap.org/#map=2/20/0";
 
 const COUNTRY_MAP_QUERY_ALIASES = {
@@ -209,17 +209,34 @@ function resolveCountryLookupName(country) {
   return COUNTRY_MAP_QUERY_ALIASES[normalizedCountry] || normalizedCountry;
 }
 
-function markerStyleFromRisk(risk) {
-  if (risk === "High") return "red-pushpin";
-  if (risk === "Medium") return "yellow-pushpin";
-  if (risk === "Low") return "green-pushpin";
-  return "lightblue1";
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 
-function buildMapPreviewUrl(lat, lon, markerStyle) {
-  const latValue = Number(lat).toFixed(4);
-  const lonValue = Number(lon).toFixed(4);
-  return `https://staticmap.openstreetmap.de/staticmap.php?center=${latValue},${lonValue}&zoom=3&size=760x300&maptype=mapnik&markers=${latValue},${lonValue},${markerStyle}`;
+function mapRiskTone(risk) {
+  if (risk === "High") return "risk-high";
+  if (risk === "Medium") return "risk-medium";
+  if (risk === "Low") return "risk-low";
+  return "risk-none";
+}
+
+function buildMapEmbedUrl(lat, lon) {
+  const latValue = Number(lat);
+  const lonValue = Number(lon);
+
+  if (!Number.isFinite(latValue) || !Number.isFinite(lonValue)) {
+    return DEFAULT_MAP_EMBED_URL;
+  }
+
+  const safeLat = clamp(latValue, -85, 85);
+  const safeLon = clamp(lonValue, -179.5, 179.5);
+  const span = safeLat > 55 || safeLat < -55 ? 22 : 14;
+  const west = clamp(safeLon - span, -179.9, 179.9);
+  const east = clamp(safeLon + span, -179.9, 179.9);
+  const south = clamp(safeLat - span, -85, 85);
+  const north = clamp(safeLat + span, -85, 85);
+
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${west.toFixed(4)}%2C${south.toFixed(4)}%2C${east.toFixed(4)}%2C${north.toFixed(4)}&layer=mapnik&marker=${safeLat.toFixed(4)}%2C${safeLon.toFixed(4)}`;
 }
 
 function buildMapPageUrl(countryName, lat, lon) {
@@ -233,25 +250,28 @@ function buildMapPageUrl(countryName, lat, lon) {
   return `https://www.openstreetmap.org/search?query=${query}`;
 }
 
-function CountryMapPreview({ previewUrl, fullMapUrl, country, isMapLoading }) {
+function CountryMapPreview({ embedUrl, fullMapUrl, country, isMapLoading, risk }) {
   const mapLabel = country ? `Open map for ${country}` : "Open world map";
+  const toneClass = mapRiskTone(risk);
 
   return (
     <a
-      className={`map-preview-link ${isMapLoading ? "is-loading" : ""}`}
+      className={`map-preview-link ${toneClass} ${isMapLoading ? "is-loading" : ""}`}
       href={fullMapUrl || DEFAULT_MAP_PAGE_URL}
       target="_blank"
       rel="noreferrer noopener"
       aria-label={mapLabel}
       title={mapLabel}
     >
-      <img
-        className="map-preview-image"
-        src={previewUrl || DEFAULT_MAP_PREVIEW_URL}
-        alt={country ? `Map preview for ${country}` : "World map preview"}
+      <iframe
+        className="map-preview-embed"
+        src={embedUrl || DEFAULT_MAP_EMBED_URL}
+        title={country ? `Map preview for ${country}` : "World map preview"}
         loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
       />
       <span className="map-open-icon" aria-hidden="true">↗</span>
+      <span className={`map-risk-chip ${toneClass}`}>{risk || "Unknown"}</span>
       {isMapLoading ? <span className="map-loading-overlay" /> : null}
     </a>
   );
@@ -698,6 +718,7 @@ const css = `
     border: 1px solid rgba(129, 140, 248, 0.2);
     display: block;
     transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    background: #0f172a;
   }
 
   .map-preview-link:hover {
@@ -706,16 +727,36 @@ const css = `
     box-shadow: 0 10px 20px rgba(15, 23, 42, 0.35);
   }
 
-  .map-preview-image {
+  .map-preview-embed {
     width: 100%;
     height: 100%;
     display: block;
-    object-fit: cover;
+    border: 0;
+    pointer-events: none;
     filter: saturate(0.95) contrast(1.04);
   }
 
-  .map-preview-link.is-loading .map-preview-image {
+  .map-preview-link.is-loading .map-preview-embed {
     filter: saturate(0.65) contrast(0.9) blur(0.6px);
+  }
+
+  .map-preview-link.risk-high {
+    border-color: rgba(248, 113, 113, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.15), 0 10px 22px rgba(153, 27, 27, 0.28);
+  }
+
+  .map-preview-link.risk-medium {
+    border-color: rgba(251, 191, 36, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.15), 0 10px 22px rgba(146, 64, 14, 0.28);
+  }
+
+  .map-preview-link.risk-low {
+    border-color: rgba(74, 222, 128, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.15), 0 10px 22px rgba(21, 128, 61, 0.24);
+  }
+
+  .map-preview-link.risk-none {
+    border-color: rgba(129, 140, 248, 0.35);
   }
 
   .map-open-icon {
@@ -736,6 +777,42 @@ const css = `
     z-index: 3;
   }
 
+  .map-risk-chip {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    z-index: 3;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 4px 10px;
+    border: 1px solid transparent;
+    background: rgba(15, 23, 42, 0.76);
+    color: #cbd5e1;
+  }
+
+  .map-risk-chip.risk-high {
+    color: #fca5a5;
+    border-color: rgba(248, 113, 113, 0.45);
+  }
+
+  .map-risk-chip.risk-medium {
+    color: #fcd34d;
+    border-color: rgba(251, 191, 36, 0.45);
+  }
+
+  .map-risk-chip.risk-low {
+    color: #86efac;
+    border-color: rgba(74, 222, 128, 0.45);
+  }
+
+  .map-risk-chip.risk-none {
+    color: #c7d2fe;
+    border-color: rgba(129, 140, 248, 0.45);
+  }
+
   .map-loading-overlay {
     position: absolute;
     inset: 0;
@@ -747,15 +824,6 @@ const css = `
   @keyframes map-sheen {
     0% { transform: translateX(-100%); }
     100% { transform: translateX(100%); }
-  }
-
-  .model-summary-pill {
-    margin-top: 8px;
-    font-size: 10px;
-    color: #6b7a96;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    font-weight: 700;
   }
 
   .metric-grid {
@@ -1015,8 +1083,7 @@ export default function App() {
   const [shake, setShake] = useState(false);
   const [backendConnected, setBackendConnected] = useState(null);
   const [responseRegions, setResponseRegions] = useState(null);
-  const [modelSummary, setModelSummary] = useState(null);
-  const [mapPreviewUrl, setMapPreviewUrl] = useState(DEFAULT_MAP_PREVIEW_URL);
+  const [mapEmbedUrl, setMapEmbedUrl] = useState(DEFAULT_MAP_EMBED_URL);
   const [mapPageUrl, setMapPageUrl] = useState(DEFAULT_MAP_PAGE_URL);
   const [isMapLoading, setIsMapLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -1129,14 +1196,13 @@ export default function App() {
     const mapCountry = String(region || submittedRegion || "").trim();
 
     if (!mapCountry) {
-      setMapPreviewUrl(DEFAULT_MAP_PREVIEW_URL);
+      setMapEmbedUrl(DEFAULT_MAP_EMBED_URL);
       setMapPageUrl(DEFAULT_MAP_PAGE_URL);
       setIsMapLoading(false);
       return undefined;
     }
 
     const lookupName = resolveCountryLookupName(mapCountry);
-    const markerStyle = markerStyleFromRisk(risk);
 
     async function resolveMap() {
       setIsMapLoading(true);
@@ -1159,7 +1225,7 @@ export default function App() {
           }
 
           if (!isCancelled) {
-            setMapPreviewUrl(buildMapPreviewUrl(latitude, longitude, markerStyle));
+            setMapEmbedUrl(buildMapEmbedUrl(latitude, longitude));
             setMapPageUrl(buildMapPageUrl(mapCountry, latitude, longitude));
             setIsMapLoading(false);
           }
@@ -1171,7 +1237,7 @@ export default function App() {
       }
 
       if (!isCancelled) {
-        setMapPreviewUrl(DEFAULT_MAP_PREVIEW_URL);
+        setMapEmbedUrl(DEFAULT_MAP_EMBED_URL);
         setMapPageUrl(buildMapPageUrl(lookupName));
         setIsMapLoading(false);
       }
@@ -1183,28 +1249,6 @@ export default function App() {
       isCancelled = true;
     };
   }, [region, submittedRegion, risk]);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    async function fetchModelSummary() {
-      try {
-        const { data } = await axios.get(buildApiUrl("/model/summary"), withApiAuth());
-        if (!isCancelled && data && typeof data === "object") {
-          setModelSummary(data);
-        }
-      } catch (error) {
-        if (!isCancelled) {
-          console.error("Failed to fetch model summary", error);
-        }
-      }
-    }
-
-    fetchModelSummary();
-    return () => {
-      isCancelled = true;
-    };
-  }, []);
 
   function removeToast(toastId) {
     setToasts((prev) => prev.filter((toast) => toast.id !== toastId));
@@ -1623,21 +1667,13 @@ export default function App() {
 
             <div className="chart-box">
               <CountryMapPreview
-                previewUrl={mapPreviewUrl}
+                embedUrl={mapEmbedUrl}
                 fullMapUrl={mapPageUrl}
                 country={region || submittedRegion}
                 isMapLoading={isMapLoading}
+                risk={risk}
               />
             </div>
-
-            {modelSummary?.risk_label_counts && (
-              <p className="model-summary-pill">
-                Dataset: {modelSummary.countries_considered || 0} countries ·
-                Low {modelSummary.risk_label_counts.Low ?? 0} ·
-                Medium {modelSummary.risk_label_counts.Medium ?? 0} ·
-                High {modelSummary.risk_label_counts.High ?? 0}
-              </p>
-            )}
 
             {hasPredictionResult && (
               <button className="btn btn-secondary" onClick={() => setPage("dashboard")} type="button">
